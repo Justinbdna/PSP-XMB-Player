@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { XMBCategory, Track, PSPTheme, PSP_MONTHLY_THEMES } from '../types/xmb';
-import { CategoryIcon, PSGlyph } from './XMBIcons';
-import { NOSTALGIC_PSP_TRACKS, searchTracks } from '../services/itunes';
+import { CategoryIcon, PSGlyph, SensMeIcon } from './XMBIcons';
+import { NOSTALGIC_PSP_TRACKS, SENSME_PLAYLISTS, searchTracks, fetchLiveNostalgicTracks } from '../services/itunes';
 import { sound } from '../services/sound';
 import { useAudio } from './AudioEngine';
 
@@ -21,9 +21,12 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
   // Navigation Coordinates
   const [catIndex, setCatIndex] = useState<number>(2); // Default to 'Music' (index 2)
-  const [itemIndex, setItemIndex] = useState<number>(0);
+  const [itemIndex, setItemIndex] = useState<number>(1); // Default to 'Memory Stick™'
   const [inSubLevel, setInSubLevel] = useState<boolean>(false);
   const [subItemIndex, setSubItemIndex] = useState<number>(0);
+
+  // Dynamic nostalgic tracks from iTunes
+  const [nostalgicTracks, setNostalgicTracks] = useState<Track[]>(NOSTALGIC_PSP_TRACKS);
 
   // Search & dynamic tracks state
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -36,14 +39,24 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   const [timeStr, setTimeStr] = useState<string>('');
   const [dateStr, setDateStr] = useState<string>('');
 
+  // Fetch live verified iTunes tracks on mount
+  useEffect(() => {
+    fetchLiveNostalgicTracks().then((fresh) => {
+      if (fresh && fresh.length > 0) {
+        setNostalgicTracks(fresh);
+      }
+    });
+  }, []);
+
+  // Update clock every second
   useEffect(() => {
     const updateClock = () => {
       const now = new Date();
       setTimeStr(
-        now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+        now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
       );
       setDateStr(
-        now.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
+        `${now.getMonth() + 1}/${now.getDate()}`
       );
     };
     updateClock();
@@ -51,7 +64,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     return () => clearInterval(interval);
   }, []);
 
-  // XMB Hierarchy Definition
+  // XMB Hierarchy Definition matching real PSP firmware
   const categories: XMBCategory[] = [
     {
       id: 'settings',
@@ -60,7 +73,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       items: [
         { id: 'theme-color', label: 'Couleur du thème', sublabel: currentTheme.name, icon: 'theme', type: 'setting' },
         { id: 'sound-toggle', label: 'Bip sonore des touches', sublabel: sound.getMuted() ? 'Désactivé' : 'Activé', icon: 'audio', type: 'action' },
-        { id: 'about-psp', label: 'Informations système', sublabel: 'PSP XMB Player v1.0.0', icon: 'info', type: 'action' },
+        { id: 'about-psp', label: 'Informations système', sublabel: 'Logiciel système PSP 6.61', icon: 'info', type: 'action' },
       ],
     },
     {
@@ -69,7 +82,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       icon: 'photo',
       items: [
         { id: 'photo-ms', label: 'Memory Stick™', sublabel: '6 images trouvées', icon: 'ms', type: 'action' },
-        { id: 'photo-cam', label: 'Appareil photo numérique PSP', sublabel: 'Aucun appareil connecté', icon: 'cam', type: 'action' },
+        { id: 'photo-cam', label: 'Appareil photo PSP', sublabel: 'Aucun appareil connecté', icon: 'cam', type: 'action' },
       ],
     },
     {
@@ -77,8 +90,9 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       name: 'Musique',
       icon: 'music',
       items: [
-        { id: 'music-ms', label: 'Memory Stick™ (Titres cultes 2005)', sublabel: `${NOSTALGIC_PSP_TRACKS.length} morceaux`, icon: 'ms', type: 'folder' },
-        { id: 'music-search', label: 'Rechercher sur iTunes...', sublabel: 'Accès streaming gratuit', icon: 'search', type: 'search' },
+        { id: 'music-sensme', label: 'SensMe™ channels', sublabel: 'Chaînes d\'ambiance et playlists', icon: 'sensme', type: 'folder' },
+        { id: 'music-ms', label: 'Memory Stick™', sublabel: `${nostalgicTracks.length} morceaux`, icon: 'ms', type: 'folder' },
+        { id: 'music-search', label: 'Rechercher sur iTunes...', sublabel: 'Extraits officiels en direct', icon: 'search', type: 'search' },
         { id: 'music-now', label: 'Lecture en cours', sublabel: currentTrack ? `${currentTrack.artist} - ${currentTrack.title}` : 'Aucune piste', icon: 'now', type: 'action' },
       ],
     },
@@ -111,58 +125,121 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     },
   ];
 
-  const activeCategory = categories[catIndex];
+  const activeCategory = categories[catIndex] || categories[2];
   const activeItems = activeCategory.items;
-  const currentSubList =
-    activeCategory.id === 'music' && itemIndex === 0
-      ? NOSTALGIC_PSP_TRACKS
-      : searchResults;
 
-  // Handle Navigation
+  // Determine current sub list according to selection
+  const currentSubList: Track[] = (() => {
+    if (activeCategory.id === 'music') {
+      const item = activeItems[itemIndex];
+      if (item?.id === 'music-sensme') {
+        return [...SENSME_PLAYLISTS.energetic, ...SENSME_PLAYLISTS.relax];
+      }
+      if (item?.id === 'music-ms') {
+        return nostalgicTracks;
+      }
+    }
+    return searchResults;
+  })();
+
+  // Keep a ref to latest state to completely prevent stale closure bugs in keyboard/external handlers
+  const stateRef = useRef({
+    catIndex,
+    itemIndex,
+    inSubLevel,
+    subItemIndex,
+    categories,
+    activeItems,
+    currentSubList,
+    isSearchModalOpen,
+    currentTrack,
+  });
+
+  useEffect(() => {
+    stateRef.current = {
+      catIndex,
+      itemIndex,
+      inSubLevel,
+      subItemIndex,
+      categories,
+      activeItems,
+      currentSubList,
+      isSearchModalOpen,
+      currentTrack,
+    };
+  });
+
+  // Handle Navigation smoothly without getting stuck
   const handleNav = (dir: 'left' | 'right' | 'up' | 'down') => {
-    if (isSearchModalOpen) return;
+    const s = stateRef.current;
+    if (s.isSearchModalOpen) return;
 
     if (dir === 'left') {
-      if (inSubLevel) {
+      if (s.inSubLevel) {
         sound.playBack();
         setInSubLevel(false);
         setSubItemIndex(0);
         return;
       }
       sound.playTick();
-      setCatIndex((prev) => (prev > 0 ? prev - 1 : categories.length - 1));
+      setCatIndex((prev) => (prev > 0 ? prev - 1 : s.categories.length - 1));
       setItemIndex(0);
     } else if (dir === 'right') {
-      if (inSubLevel) return;
+      if (s.inSubLevel) {
+        // Pressing right in sublevel on a track plays it
+        const track = s.currentSubList[s.subItemIndex];
+        if (track) {
+          sound.playEnter();
+          playTrack(track);
+        }
+        return;
+      }
+      const curItem = s.activeItems[s.itemIndex];
+      if (curItem && curItem.type === 'folder') {
+        // Pressing right on a folder enters it!
+        sound.playEnter();
+        setInSubLevel(true);
+        setSubItemIndex(0);
+        return;
+      }
       sound.playTick();
-      setCatIndex((prev) => (prev < categories.length - 1 ? prev + 1 : 0));
+      setCatIndex((prev) => (prev < s.categories.length - 1 ? prev + 1 : 0));
       setItemIndex(0);
     } else if (dir === 'up') {
       sound.playTick();
-      if (inSubLevel) {
-        setSubItemIndex((prev) => (prev > 0 ? prev - 1 : currentSubList.length - 1));
+      if (s.inSubLevel) {
+        setSubItemIndex((prev) =>
+          prev > 0 ? prev - 1 : Math.max(0, s.currentSubList.length - 1)
+        );
       } else {
-        setItemIndex((prev) => (prev > 0 ? prev - 1 : activeItems.length - 1));
+        setItemIndex((prev) =>
+          prev > 0 ? prev - 1 : Math.max(0, s.activeItems.length - 1)
+        );
       }
     } else if (dir === 'down') {
       sound.playTick();
-      if (inSubLevel) {
-        setSubItemIndex((prev) => (prev < currentSubList.length - 1 ? prev + 1 : 0));
+      if (s.inSubLevel) {
+        setSubItemIndex((prev) =>
+          prev < s.currentSubList.length - 1 ? prev + 1 : 0
+        );
       } else {
-        setItemIndex((prev) => (prev < activeItems.length - 1 ? prev + 1 : 0));
+        setItemIndex((prev) =>
+          prev < s.activeItems.length - 1 ? prev + 1 : 0
+        );
       }
     }
   };
 
   // Handle Validation (✕ / Key X / Enter)
   const handleValidate = () => {
-    if (isSearchModalOpen) return;
+    const s = stateRef.current;
+    if (s.isSearchModalOpen) return;
 
     sound.playEnter();
 
     // 1. In sub-level: click to play track
-    if (inSubLevel) {
-      const selectedTrack = currentSubList[subItemIndex];
+    if (s.inSubLevel) {
+      const selectedTrack = s.currentSubList[s.subItemIndex];
       if (selectedTrack) {
         playTrack(selectedTrack);
       }
@@ -170,7 +247,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     }
 
     // 2. Main level
-    const currentItem = activeItems[itemIndex];
+    const currentItem = s.activeItems[s.itemIndex];
     if (!currentItem) return;
 
     if (currentItem.type === 'folder') {
@@ -181,12 +258,11 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     } else if (currentItem.id === 'music-now') {
       togglePlay();
     } else if (currentItem.id === 'theme-color') {
-      // Rotate monthly theme
       const nextMonth = (currentTheme.month % 12) + 1;
       onThemeChange(PSP_MONTHLY_THEMES[nextMonth]);
     } else if (currentItem.id === 'sound-toggle') {
       sound.toggleMute();
-      setItemIndex((prev) => prev); // force re-render
+      setItemIndex((prev) => prev);
     } else {
       setInfoPopup(`${currentItem.label} : ${currentItem.sublabel || 'Disponible sur le système'}`);
       setTimeout(() => setInfoPopup(null), 3000);
@@ -195,8 +271,9 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
   // Handle Cancel (◯ / Key O / Escape)
   const handleCancel = () => {
+    const s = stateRef.current;
     sound.playBack();
-    if (isSearchModalOpen) {
+    if (s.isSearchModalOpen) {
       setIsSearchModalOpen(false);
       return;
     }
@@ -204,7 +281,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       setInfoPopup(null);
       return;
     }
-    if (inSubLevel) {
+    if (s.inSubLevel) {
       setInSubLevel(false);
       setSubItemIndex(0);
     }
@@ -212,14 +289,15 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
   // Handle Options (△ / Key A)
   const handleOptions = () => {
+    const s = stateRef.current;
     sound.playOption();
-    if (inSubLevel) {
-      const track = currentSubList[subItemIndex];
+    if (s.inSubLevel) {
+      const track = s.currentSubList[s.subItemIndex];
       if (track) {
         setInfoPopup(`Titre : ${track.title}\nArtiste : ${track.artist}\nAlbum : ${track.album}`);
       }
     } else {
-      setInfoPopup(`Catégorie : ${activeCategory.name}\nPSP System Software v6.61`);
+      setInfoPopup(`Catégorie : ${activeCategory.name}\nLogiciel système PSP 6.61`);
     }
     setTimeout(() => setInfoPopup(null), 3500);
   };
@@ -257,7 +335,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       // Prevent interfering when typing in search input
-      if (isSearchModalOpen && e.target instanceof HTMLInputElement) return;
+      if (stateRef.current.isSearchModalOpen && e.target instanceof HTMLInputElement) return;
 
       const key = e.key.toLowerCase();
 
@@ -290,43 +368,36 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [catIndex, itemIndex, inSubLevel, subItemIndex, currentSubList, isSearchModalOpen, infoPopup]);
+  }, []);
 
   return (
     <div className="relative w-full h-full select-none overflow-hidden text-white font-['Inter',sans-serif]">
-      {/* 1. TOP STATUS BAR */}
-      <div className="absolute top-2 left-4 right-4 flex justify-between items-center z-20 text-[11px] font-medium tracking-wider text-white/80 drop-shadow">
-        <div className="flex items-center gap-2">
-          <span className="font-bold tracking-widest text-white/90">SONY</span>
-          <span className="text-white/40">|</span>
-          <span className="text-white/70 uppercase text-[10px]">{activeCategory.name}</span>
-        </div>
-
+      {/* 1. TOP STATUS BAR (Fidèle à la photo 2 : aucun logo Sony en haut à gauche, Date Heure et Batterie à droite) */}
+      <div className="absolute top-2.5 left-4 right-4 flex justify-end items-center z-20 text-[11px] font-medium tracking-wider text-white/80 drop-shadow">
         <div className="flex items-center gap-3">
           {isPlaying && (
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/15 animate-pulse">
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/15 animate-pulse mr-1">
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
               <span className="text-[10px] text-emerald-300 font-mono">EN LECTURE</span>
             </div>
           )}
-          <span>{dateStr}</span>
+          <span className="font-mono text-white/90">{dateStr}</span>
           <span className="font-mono font-bold text-white">{timeStr}</span>
 
-          {/* Battery Icon */}
+          {/* Authentic PSP 3-Segment Battery Icon */}
           <div className="flex items-center gap-1 bg-white/10 px-1.5 py-0.5 rounded border border-white/20">
-            <div className="w-4 h-2 border border-white/80 rounded-sm p-[1px] flex gap-[1px]">
-              <div className="bg-white/90 w-1 h-full rounded-[0.5px]"></div>
-              <div className="bg-white/90 w-1 h-full rounded-[0.5px]"></div>
-              <div className="bg-white/90 w-1 h-full rounded-[0.5px]"></div>
+            <div className="w-4 h-2 border border-white/90 rounded-[1px] p-[1px] flex gap-[1px]">
+              <div className="bg-white/95 w-1 h-full rounded-[0.5px]"></div>
+              <div className="bg-white/95 w-1 h-full rounded-[0.5px]"></div>
+              <div className="bg-white/95 w-1 h-full rounded-[0.5px]"></div>
             </div>
-            <span className="text-[9px] font-mono">100%</span>
           </div>
         </div>
       </div>
 
-      {/* 2. HORIZONTAL CATEGORIES BAR (X AXIS) */}
+      {/* 2. HORIZONTAL CATEGORIES BAR (X AXIS) - Centered layout with active label under icon */}
       <div
-        className="absolute top-10 left-0 right-0 h-16 flex items-center z-10 transition-transform duration-300 ease-out"
+        className="absolute top-9 left-0 right-0 h-16 flex items-center z-10 transition-transform duration-300 ease-out"
         style={{
           transform: `translateX(calc(120px - ${catIndex * 84}px))`,
         }}
@@ -349,14 +420,14 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
               }`}
             >
               <div
-                className={`p-2 rounded-xl transition-all duration-300 ${
-                  isActive ? 'bg-white/15 shadow-[0_0_20px_rgba(255,255,255,0.4)] backdrop-blur-md' : ''
+                className={`p-1.5 rounded-xl transition-all duration-300 ${
+                  isActive ? 'shadow-[0_0_24px_rgba(255,255,255,0.45)]' : ''
                 }`}
               >
                 <CategoryIcon type={cat.icon} active={isActive} />
               </div>
               {isActive && (
-                <span className="mt-1 text-[11px] font-semibold tracking-wider text-white drop-shadow">
+                <span className="mt-0.5 text-[11px] font-semibold tracking-wider text-white drop-shadow">
                   {cat.name}
                 </span>
               )}
@@ -365,16 +436,16 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         })}
       </div>
 
-      {/* 3. VERTICAL COLUMN (Y AXIS) */}
+      {/* 3. VERTICAL COLUMN (Y AXIS) - Items under active category */}
       <div
-        className="absolute left-[108px] top-28 bottom-12 w-[340px] z-10 transition-all duration-300 ease-out overflow-hidden"
+        className="absolute left-[108px] top-28 bottom-12 w-[360px] z-10 transition-all duration-300 ease-out overflow-hidden"
       >
         {!inSubLevel ? (
           // Main Category Items List
           <div
             className="flex flex-col transition-transform duration-250 ease-out"
             style={{
-              transform: `translateY(calc(40px - ${itemIndex * 48}px))`,
+              transform: `translateY(calc(36px - ${itemIndex * 48}px))`,
             }}
           >
             {activeItems.map((item, idx) => {
@@ -388,12 +459,20 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                   }}
                   className={`h-12 flex items-center px-3 gap-3 rounded-lg cursor-pointer transition-all duration-200 ${
                     isSelected
-                      ? 'bg-gradient-to-r from-white/25 via-white/15 to-transparent border-l-2 border-white shadow-[0_0_15px_rgba(255,255,255,0.25)]'
-                      : 'opacity-40 hover:opacity-70'
+                      ? 'bg-gradient-to-r from-white/25 via-white/10 to-transparent border-l-3 border-white shadow-[0_0_15px_rgba(255,255,255,0.2)]'
+                      : 'opacity-40 hover:opacity-75'
                   }`}
                 >
                   <div className="w-7 h-7 rounded flex items-center justify-center bg-white/10 text-white flex-shrink-0">
-                    {item.type === 'folder' ? '📁' : item.type === 'search' ? '🔍' : '🎵'}
+                    {item.id === 'music-sensme' ? (
+                      <SensMeIcon size={18} />
+                    ) : item.type === 'folder' ? (
+                      '📁'
+                    ) : item.type === 'search' ? (
+                      '🔍'
+                    ) : (
+                      '🎵'
+                    )}
                   </div>
                   <div className="flex flex-col min-w-0">
                     <span className="text-[13px] font-semibold truncate text-white drop-shadow">
@@ -410,16 +489,16 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
             })}
           </div>
         ) : (
-          // Sub-level (Tracks List from Memory Stick or Search Results)
+          // Sub-level (Tracks List from Memory Stick, SensMe or Search Results)
           <div
             className="flex flex-col transition-transform duration-250 ease-out"
             style={{
-              transform: `translateY(calc(40px - ${subItemIndex * 52}px))`,
+              transform: `translateY(calc(36px - ${subItemIndex * 52}px))`,
             }}
           >
             {currentSubList.length === 0 ? (
               <div className="text-white/60 text-xs italic px-4 py-8">
-                Aucun morceau trouvé.
+                Chargement des pistes ou aucun morceau trouvé...
               </div>
             ) : (
               currentSubList.map((track, idx) => {
@@ -468,7 +547,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
       {/* 4. NOW PLAYING FLOATING MINI-PLAYER (Bottom-Right) */}
       {currentTrack && (
-        <div className="absolute right-4 bottom-10 w-64 p-2.5 rounded-xl bg-black/40 backdrop-blur-md border border-white/20 shadow-2xl flex items-center gap-3 z-20">
+        <div className="absolute right-4 bottom-10 w-64 p-2.5 rounded-xl bg-black/45 backdrop-blur-md border border-white/20 shadow-2xl flex items-center gap-3 z-20">
           <img
             src={currentTrack.artworkUrl}
             alt={currentTrack.title}
@@ -496,7 +575,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
       {/* 5. SEARCH MODAL DIALOG */}
       {isSearchModalOpen && (
-        <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-6">
+        <div className="absolute inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-6">
           <div className="w-full max-w-sm bg-gradient-to-b from-[#252a34] to-[#12161f] border border-white/30 rounded-2xl p-4 shadow-2xl">
             <div className="flex items-center justify-between pb-2 border-b border-white/10 mb-3">
               <span className="text-xs font-bold text-white tracking-wider flex items-center gap-1.5">
@@ -510,7 +589,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
               </button>
             </div>
             <p className="text-[10px] text-white/60 mb-2">
-              Tape un nom d'artiste ou de morceau pour charger des extraits en streaming :
+              Tape un artiste ou un titre pour lancer l'extrait en streaming direct :
             </p>
             <form
               onSubmit={(e) => {
@@ -522,7 +601,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
               <input
                 type="text"
                 autoFocus
-                placeholder="Ex: Daft Punk, Nirvana, Aya..."
+                placeholder="Ex: Daft Punk, Nirvana, Eminem..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="flex-1 bg-black/50 border border-white/25 rounded-lg px-3 py-1.5 text-xs text-white placeholder-white/40 focus:outline-none focus:border-emerald-400"
@@ -541,7 +620,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
       {/* 6. INFO POPUP NOTIFICATION */}
       {infoPopup && (
-        <div className="absolute top-16 right-6 max-w-xs bg-black/80 backdrop-blur-md border border-white/25 rounded-xl p-3 text-xs text-white shadow-2xl z-40 animate-fade-in whitespace-pre-line">
+        <div className="absolute top-16 right-6 max-w-xs bg-black/85 backdrop-blur-md border border-white/25 rounded-xl p-3 text-xs text-white shadow-2xl z-40 animate-fade-in whitespace-pre-line">
           {infoPopup}
         </div>
       )}
@@ -566,7 +645,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
             <span>Play/Pause (S)</span>
           </span>
         </div>
-        <div className="text-white/50 text-[9px]">
+        <div className="text-white/40 text-[9px]">
           PSP™ PlayStation Portable
         </div>
       </div>

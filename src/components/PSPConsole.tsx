@@ -4,6 +4,7 @@ import { XMBMenu } from './XMBMenu';
 import { PSPTheme, PSP_MONTHLY_THEMES } from '../types/xmb';
 import { useAudio } from './AudioEngine';
 import { sound } from '../services/sound';
+import { PlayStationLogo } from './XMBIcons';
 
 export const PSPConsole: React.FC = () => {
   const currentMonth = new Date().getMonth() + 1;
@@ -15,10 +16,11 @@ export const PSPConsole: React.FC = () => {
     timestamp: number;
   } | null>(null);
 
-  const { adjustVolume, togglePlay } = useAudio();
+  const { adjustVolume, togglePlay, showVolumeOSD, volume } = useAudio();
   const [powerOn, setPowerOn] = useState<boolean>(true);
 
   const sendCommand = (action: string) => {
+    (document.activeElement as HTMLElement)?.blur();
     setExternalCommand({ action, timestamp: Date.now() });
   };
 
@@ -70,17 +72,16 @@ export const PSPConsole: React.FC = () => {
           </div>
 
           {/* ========================================================
-              LEFT GRIP POD (D-PAD + ANALOG STICK + MS LED)
+              LEFT GRIP POD (PLAYSTATION LOGO + D-PAD + ANALOG STICK + MS DUO / WLAN AT BOTTOM)
               ======================================================== */}
-          <div className="w-[18%] h-[82%] flex flex-col items-center justify-between py-4 pl-4 z-10">
-            {/* Memory Stick Duo LED */}
-            <div className="flex items-center gap-1.5 self-start ml-4">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shadow-[0_0_8px_#f59e0b]"></span>
-              <span className="text-[9px] font-bold tracking-wider text-white/40 font-mono">MS DUO</span>
+          <div className="w-[18%] h-[88%] flex flex-col items-center justify-between py-2 pl-4 z-10">
+            {/* Top Left: PlayStation Brand Logo */}
+            <div className="self-start ml-4 mt-1">
+              <PlayStationLogo size={26} className="text-[#aab5c6] drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] opacity-85" />
             </div>
 
             {/* D-PAD (Directional Cross) */}
-            <div className="relative w-28 h-28 flex items-center justify-center">
+            <div className="relative w-28 h-28 flex items-center justify-center my-auto">
               {/* Center Cross Plate Base */}
               <div className="absolute w-24 h-24 rounded-full bg-[#121418] shadow-inner border border-white/5"></div>
 
@@ -122,7 +123,7 @@ export const PSPConsole: React.FC = () => {
 
             {/* ANALOG STICK (PSP NUB) */}
             <div
-              className="relative w-14 h-14 rounded-full bg-[#111317] border border-white/10 flex items-center justify-center shadow-inner cursor-pointer active:scale-95 transition"
+              className="relative w-14 h-14 rounded-full bg-[#111317] border border-white/10 flex items-center justify-center shadow-inner cursor-pointer active:scale-95 transition my-1"
               title="Stick Analogique PSP"
             >
               {/* Textured knurled surface */}
@@ -135,23 +136,24 @@ export const PSPConsole: React.FC = () => {
                 <div className="w-7 h-7 rounded-full border border-white/10 opacity-40"></div>
               </div>
             </div>
+
+            {/* Bottom Left: MS DUO LED + WLAN Indicators (Position authentique PSP en bas à gauche) */}
+            <div className="flex flex-col gap-1 items-start self-start ml-3 mb-1">
+              <div className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shadow-[0_0_8px_#f59e0b]"></span>
+                <span className="text-[8px] font-bold tracking-wider text-white/50 font-mono">MS DUO</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]"></span>
+                <span className="text-[8px] font-bold tracking-wider text-white/40 font-mono">WLAN</span>
+              </div>
+            </div>
           </div>
 
           {/* ========================================================
               CENTER SCREEN (16:9 BEZEL + LCD DISPLAY + BOTTOM BAR)
               ======================================================== */}
-          <div className="flex-1 h-[94%] flex flex-col items-center justify-between px-2 z-10">
-            {/* Top Sony Branding */}
-            <div className="w-full flex justify-between items-center px-4 pt-1">
-              <span className="text-[12px] font-extrabold tracking-[0.25em] text-[#b8c2d1] font-mono drop-shadow">
-                SONY
-              </span>
-              <div className="flex items-center gap-2">
-                <span className="text-[9px] font-semibold text-white/40 tracking-wider">STEREO SOUND</span>
-                <div className="w-2 h-2 rounded-full bg-white/20"></div>
-              </div>
-            </div>
-
+          <div className="flex-1 h-[94%] flex flex-col items-center justify-between px-2 pt-1 pb-1 z-10">
             {/* THE 16:9 LCD SCREEN CONTAINER */}
             <div
               className="relative w-full flex-1 my-1 rounded-2xl overflow-hidden border-2 border-[#2b303c]"
@@ -174,6 +176,31 @@ export const PSPConsole: React.FC = () => {
                     onThemeChange={setTheme}
                     externalCommand={externalCommand}
                   />
+
+                  {/* Layer 2: Authentic PSP Volume OSD Overlay */}
+                  {showVolumeOSD && (
+                    <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-50 bg-[#121620]/90 backdrop-blur-md border border-white/25 rounded-md px-3.5 py-1.5 flex items-center gap-2.5 shadow-2xl animate-fade-in pointer-events-none">
+                      <span className="text-xs text-white/90">🔊</span>
+                      <div className="flex gap-[2px] items-center">
+                        {Array.from({ length: 24 }).map((_, i) => {
+                          const filled = i < Math.round(volume * 24);
+                          return (
+                            <div
+                              key={i}
+                              className={`w-1.5 h-3 rounded-[1px] transition-colors ${
+                                filled
+                                  ? 'bg-emerald-400 shadow-[0_0_4px_#34d399]'
+                                  : 'bg-white/15'
+                              }`}
+                            />
+                          );
+                        })}
+                      </div>
+                      <span className="text-[10px] font-mono font-bold text-white/90 min-w-[20px] text-right">
+                        {Math.round(volume * 30)}
+                      </span>
+                    </div>
+                  )}
 
                   {/* Subtle LCD Scanline / Glass Reflection Overlay */}
                   <div className="absolute inset-0 pointer-events-none bg-gradient-to-tr from-transparent via-white/[0.03] to-white/[0.08]"></div>
@@ -202,7 +229,7 @@ export const PSPConsole: React.FC = () => {
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => {
-                    adjustVolume(-0.1);
+                    adjustVolume(-0.05);
                     sound.playTick();
                   }}
                   className="w-7 h-5 rounded bg-[#181b22] border border-white/15 text-[11px] font-bold text-white/80 active:scale-95 shadow flex items-center justify-center"
@@ -213,7 +240,7 @@ export const PSPConsole: React.FC = () => {
                 <span className="text-[9px] font-mono text-white/50 px-1">VOL</span>
                 <button
                   onClick={() => {
-                    adjustVolume(0.1);
+                    adjustVolume(0.05);
                     sound.playTick();
                   }}
                   className="w-7 h-5 rounded bg-[#181b22] border border-white/15 text-[11px] font-bold text-white/80 active:scale-95 shadow flex items-center justify-center"
@@ -267,24 +294,18 @@ export const PSPConsole: React.FC = () => {
           </div>
 
           {/* ========================================================
-              RIGHT GRIP POD (ACTION BUTTONS △ ◯ ✕ □ + POWER SWITCH)
+              RIGHT GRIP POD (SONY BRANDING + ACTION BUTTONS △ ◯ ✕ □ + POWER SWITCH)
               ======================================================== */}
-          <div className="w-[18%] h-[82%] flex flex-col items-center justify-between py-4 pr-4 z-10">
-            {/* POWER / HOLD LED indicator */}
-            <div className="flex items-center gap-1.5 self-end mr-4">
-              <span className="text-[9px] font-bold tracking-wider text-white/40 font-mono">POWER</span>
-              <span
-                onClick={() => setPowerOn(!powerOn)}
-                className={`w-2 h-2 rounded-full cursor-pointer transition ${
-                  powerOn
-                    ? 'bg-emerald-400 shadow-[0_0_10px_#34d399]'
-                    : 'bg-red-900'
-                }`}
-              ></span>
+          <div className="w-[18%] h-[88%] flex flex-col items-center justify-between py-2 pr-4 z-10">
+            {/* Top Right: SONY Branding (Position authentique de la console) */}
+            <div className="self-end mr-4 mt-1">
+              <span className="text-[13px] font-black tracking-[0.22em] text-[#ccd5e2] font-mono drop-shadow">
+                SONY
+              </span>
             </div>
 
             {/* ACTION BUTTONS (TRIANGLE, CIRCLE, CROSS, SQUARE) */}
-            <div className="relative w-28 h-28 flex items-center justify-center">
+            <div className="relative w-28 h-28 flex items-center justify-center my-auto">
               {/* TRIANGLE (▲) - Key A */}
               <button
                 onClick={() => sendCommand('triangle')}
@@ -343,10 +364,23 @@ export const PSPConsole: React.FC = () => {
             </div>
 
             {/* Speaker Grille simulation */}
-            <div className="grid grid-cols-3 gap-1 self-center">
+            <div className="grid grid-cols-3 gap-1 self-center my-1">
               <div className="w-1 h-1 rounded-full bg-white/20"></div>
               <div className="w-1 h-1 rounded-full bg-white/20"></div>
               <div className="w-1 h-1 rounded-full bg-white/20"></div>
+            </div>
+
+            {/* POWER / HOLD LED indicator */}
+            <div className="flex items-center gap-1.5 self-end mr-3 mb-1">
+              <span className="text-[9px] font-bold tracking-wider text-white/40 font-mono">POWER</span>
+              <span
+                onClick={() => setPowerOn(!powerOn)}
+                className={`w-2 h-2 rounded-full cursor-pointer transition ${
+                  powerOn
+                    ? 'bg-emerald-400 shadow-[0_0_10px_#34d399]'
+                    : 'bg-red-900'
+                }`}
+              ></span>
             </div>
           </div>
         </div>

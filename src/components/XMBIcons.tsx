@@ -100,3 +100,50 @@ export const PSGlyph: React.FC<{ type: 'cross' | 'circle' | 'triangle' | 'square
       );
   }
 };
+
+// Official PlayStation brand symbol
+export const PlayStationLogo: React.FC<{ size?: number; className?: string }> = ({
+  size = 22,
+  className = '',
+}) => (
+  <svg
+    width={size}
+    height={(size * 28) / 36}
+    viewBox="0 0 36 28"
+    fill="currentColor"
+    className={className}
+  >
+    <path
+      d="M17.4 1.5c-.8 0-1.4.6-1.4 1.4v18.7c0 .8.6 1.4 1.4 1.4h3.6c.8 0 1.4-.6 1.4-1.4V2.9c0-.8-.6-1.4-1.4-1.4h-3.6z"
+      opacity="0.95"
+    />
+    <path
+      d="M16 21.6l-7.3 2.6c-2.4.9-4.1 2.3-4.8 4-.5 1.2-.3 2.4.6 3.2.9.8 2.3 1.1 3.8.7 2-.5 3.7-1.8 4.8-3.5.7-1.1 1.1-2.4 1.1-3.7v-3.3h1.8z"
+      opacity="0.65"
+      transform="scale(0.85) translate(2, -3)"
+    />
+    <path
+      d="M34.2 19.3c-1.9-.7-4-.7-5.7-.1-1.3.4-2.6 1.2-3.4 2.2-.6.6-1 1.3-1.1 2.1-.2 1 0 2 .5 2.8.9 1.2 2.3 1.7 3.7 1.7 2 0 4-1 5.2-2.7 1-1.4 1.5-3.1 1.4-4.8 0-.4-.3-.7-.6-1.2zm-4.2 6.8c-1.2 0-2.2-.6-2.7-1.6-.2-.5-.2-1.1-.1-1.6.2-.5.6-1 1.1-1.3 1-.6 2.3-.7 3.4-.3.2.1.5.2.7.4.1 1.3-.4 2.6-1.3 3.4-.3.6-.8 1-1.1 1z"
+      opacity="0.75"
+      transform="scale(0.85) translate(1, -3)"
+    />
+  </svg>
+);
+
+// SensMe™ Heart Icon
+export const SensMeIcon: React.FC<{ size?: number }> = ({ size = 20 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <path
+      d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+      fill="url(#sensme-grad)"
+    />
+    <defs>
+      <linearGradient id="sensme-grad" x1="2" y1="3" x2="22" y2="21" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#60a5fa" />
+        <stop offset="0.5" stopColor="#a855f7" />
+        <stop offset="1" stopColor="#ec4899" />
+      </linearGradient>
+    </defs>
+  </svg>
+);
+
