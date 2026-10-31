@@ -30,7 +30,7 @@ export const PSPConsole: React.FC = () => {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(50,70,100,0.18),rgba(0,0,0,0.95))] pointer-events-none"></div>
 
       {/* Responsive Scaling Wrapper */}
-      <div className="relative z-10 w-full max-w-[1020px] aspect-[1020/460] select-none flex items-center justify-center">
+      <div className="relative z-10 w-full max-w-[1140px] aspect-[1020/460] select-none flex items-center justify-center">
         
         {/* ========================================================
             THE PSP HARDWARE CHASSIS (PIANO BLACK WITH METALLIC TRIM)
@@ -214,13 +214,14 @@ export const PSPConsole: React.FC = () => {
 
             {/* BOTTOM UTILITY BAR (HOME, VOL-, VOL+, ♫, SELECT, START) */}
             <div className="w-full flex items-center justify-between px-6 pb-1 text-white/60">
-              {/* HOME / PS Button */}
+              {/* HOME / PS Button (Retour au menu d'accueil) */}
               <button
                 onClick={() => {
-                  sound.playOption();
-                  sendCommand('triangle');
+                  sound.playBack();
+                  sendCommand('home');
                 }}
                 className="px-2.5 py-1 rounded-md bg-[#181b22] border border-white/15 text-[10px] font-bold text-white/80 active:scale-95 shadow flex items-center gap-1"
+                title="Menu d'accueil (Home)"
               >
                 <span>HOME</span>
               </button>
@@ -348,7 +349,7 @@ export const PSPConsole: React.FC = () => {
                 </span>
               </button>
 
-              {/* SQUARE (■) - Key S / Play-Pause */}
+              {/* SQUARE (□) - Key S / Play-Pause */}
               <button
                 onClick={() => sendCommand('square')}
                 className="absolute left-0 w-9 h-9 rounded-full border border-white/20 active:scale-90 transition flex items-center justify-center shadow-lg"
@@ -357,9 +358,9 @@ export const PSPConsole: React.FC = () => {
                 }}
                 title="Carré (Touche S / Play-Pause)"
               >
-                <span className="text-pink-400 font-bold text-sm drop-shadow-[0_0_6px_#f472b6]">
-                  ■
-                </span>
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" className="drop-shadow-[0_0_8px_#f472b6]">
+                  <rect x="2" y="2" width="12" height="12" rx="1.5" stroke="#f472b6" strokeWidth="2.4" />
+                </svg>
               </button>
             </div>
 

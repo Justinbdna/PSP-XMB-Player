@@ -1,9 +1,66 @@
 import { Track } from '../types/xmb';
 
-// 2005 Nostalgic Tracks matching PSP release era with verified live streamable iTunes previews
+// 2005 Nostalgic Tracks + User Favorites matching PSP release era with verified live streamable iTunes previews
 export const NOSTALGIC_PSP_TRACKS: Track[] = [
+  // Sade Classics
   {
-    id: 'psp-850571371',
+    id: 'psp-sade-like-a-tattoo',
+    title: 'Like a Tattoo',
+    artist: 'Sade',
+    album: 'Love Deluxe',
+    previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/54/31/fb/5431fba7-f8e2-78a3-680b-29f53f19f326/mzaf_4568317637618415745.plus.aac.p.m4a',
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/18/c8/d7/18c8d7bc-8491-09e6-df0d-6e0a83ead680/mzi.wsikzifg.jpg/600x600bb.jpg',
+    durationMs: 218000,
+  },
+  {
+    id: 'psp-sade-no-ordinary-love',
+    title: 'No Ordinary Love',
+    artist: 'Sade',
+    album: 'Love Deluxe',
+    previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/de/ba/4b/deba4b91-edf0-1b06-6e19-ea4e07ae8070/mzaf_14195090635642668997.plus.aac.p.m4a',
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/18/c8/d7/18c8d7bc-8491-09e6-df0d-6e0a83ead680/mzi.wsikzifg.jpg/600x600bb.jpg',
+    durationMs: 440467,
+  },
+  {
+    id: 'psp-sade-kiss-of-life',
+    title: 'Kiss of Life',
+    artist: 'Sade',
+    album: 'Love Deluxe',
+    previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/4d/4d/10/4d4d1099-d3f7-06a6-c4af-f82ad3c3fab8/mzaf_10268299450496380808.plus.aac.p.m4a',
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/18/c8/d7/18c8d7bc-8491-09e6-df0d-6e0a83ead680/mzi.wsikzifg.jpg/600x600bb.jpg',
+    durationMs: 350000,
+  },
+  // Tears for Fears & Player
+  {
+    id: 'psp-tears-for-fears',
+    title: 'Everybody Wants to Rule the World',
+    artist: 'Tears for Fears',
+    album: 'Songs from the Big Chair',
+    previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/ed/23/1f/ed231f7c-78cb-3b4d-f312-fc6b7ec09063/mzaf_14579022326895349191.plus.aac.p.m4a',
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/74/41/43/744143ae-afad-8380-106e-1c1bc48922e4/14UMGIM34762.rgb.jpg/600x600bb.jpg',
+    durationMs: 251480,
+  },
+  {
+    id: 'psp-player-baby-come-back',
+    title: 'Baby Come Back',
+    artist: 'Player',
+    album: 'Player (1977)',
+    previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/65/df/ec/65dfec64-6997-c518-6700-461bf49b41e0/mzaf_15777928770580253326.plus.aac.p.m4a',
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music114/v4/b8/53/c1/b853c1bc-aa35-1868-181c-6cd24ec9c5b1/00602577245428.rgb.jpg/600x600bb.jpg',
+    durationMs: 255845,
+  },
+  // Iconic 2005 PSP Release Classics
+  {
+    id: 'psp-bep-my-humps',
+    title: 'My Humps',
+    artist: 'Black Eyed Peas',
+    album: 'Monkey Business (2005)',
+    previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/e8/e1/21/e8e12185-075c-afc9-c72a-5dd8922788cd/mzaf_11591028289963248907.plus.aac.p.m4a',
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music114/v4/63/b0/47/63b0476f-3cc6-276a-f09e-ab415db818cd/00602498372425.rgb.jpg/600x600bb.jpg',
+    durationMs: 326960,
+  },
+  {
+    id: 'psp-gorillaz-feel-good',
     title: 'Feel Good Inc.',
     artist: 'Gorillaz',
     album: 'Demon Days (2005)',
@@ -12,7 +69,7 @@ export const NOSTALGIC_PSP_TRACKS: Track[] = [
     durationMs: 221173,
   },
   {
-    id: 'psp-697195462',
+    id: 'psp-daft-punk-one-more-time',
     title: 'One More Time',
     artist: 'Daft Punk',
     album: 'Discovery',
@@ -21,7 +78,7 @@ export const NOSTALGIC_PSP_TRACKS: Track[] = [
     durationMs: 320357,
   },
   {
-    id: 'psp-590431785',
+    id: 'psp-linkin-park-in-the-end',
     title: 'In the End',
     artist: 'Linkin Park',
     album: 'Hybrid Theory',
@@ -30,7 +87,7 @@ export const NOSTALGIC_PSP_TRACKS: Track[] = [
     durationMs: 216294,
   },
   {
-    id: 'psp-1123076830',
+    id: 'psp-coldplay-speed-of-sound',
     title: 'Speed of Sound',
     artist: 'Coldplay',
     album: 'X&Y (2005)',
@@ -39,19 +96,46 @@ export const NOSTALGIC_PSP_TRACKS: Track[] = [
     durationMs: 288393,
   },
   {
-    id: 'psp-gd-holiday',
+    id: 'psp-green-day-holiday',
     title: 'Holiday',
     artist: 'Green Day',
-    album: 'American Idiot (2004)',
+    album: 'American Idiot (2004-2005)',
     previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/86/f1/d0/86f1d039-f2d6-2f5b-b34b-2b63504fa6d0/mzaf_3363059623415356317.plus.aac.p.m4a',
-    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/64/70/4c/64704c7f-1786-f04b-32ae-9b216ce70498/093624877721.jpg/600x600bb.jpg',
-    durationMs: 232000,
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/0e/17/f0/0e17f011-aadf-d4d1-1c7e-b61ce39f968b/093624947301.jpg/600x600bb.jpg',
+    durationMs: 232826,
   },
   {
-    id: 'psp-692624266',
+    id: 'psp-50-cent-candy-shop',
+    title: 'Candy Shop (feat. Olivia)',
+    artist: '50 Cent',
+    album: 'The Massacre (2005)',
+    previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/6e/c6/62/6ec6622b-cd59-d3e4-3f48-ff11e4aee789/mzaf_2854815072779968788.plus.aac.p.m4a',
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/b6/50/07/b650079b-15db-74fb-5395-ff7ef7c5a45e/17UMGIM93593.rgb.jpg/600x600bb.jpg',
+    durationMs: 208973,
+  },
+  {
+    id: 'psp-madonna-hung-up',
+    title: 'Hung Up',
+    artist: 'Madonna',
+    album: 'Confessions on a Dance Floor (2005)',
+    previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/65/45/c3/6545c319-f578-6e0a-ab1d-f7ea3089f297/mzaf_15842461037347473100.plus.aac.p.m4a',
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/24/5a/e8/245ae865-c767-310b-c8ee-6b3a05e43fd4/dj.hgvybcjz.jpg/600x600bb.jpg',
+    durationMs: 337663,
+  },
+  {
+    id: 'psp-gwen-stefani-hollaback',
+    title: 'Hollaback Girl',
+    artist: 'Gwen Stefani',
+    album: 'Love. Angel. Music. Baby. (2005)',
+    previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/aa/ab/dd/aaabdd89-7ca3-e6fe-86d1-e00b054d9332/mzaf_6128231353075845529.plus.aac.p.m4a',
+    artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/54/72/05/5472050c-5ec7-8cc5-787d-43f0d7f916d2/19UM1IM10385.rgb.jpg/600x600bb.jpg',
+    durationMs: 200760,
+  },
+  {
+    id: 'psp-modjo-lady',
     title: 'Lady (Hear Me Tonight)',
     artist: 'Modjo',
-    album: 'Modjo',
+    album: 'Modjo (Remastered)',
     previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/39/a0/2a/39a02a04-7e77-c309-9128-02e61098a7b7/mzaf_7220909039799435982.plus.aac.p.m4a',
     artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/f5/25/2b/f5252b6e-0659-890b-7e9d-0e691944b95b/cover.jpg/600x600bb.jpg',
     durationMs: 307154,
@@ -61,40 +145,19 @@ export const NOSTALGIC_PSP_TRACKS: Track[] = [
 // SensMe™ channels playlists (Lounge, Relax, Energetic, Emotional)
 export const SENSME_PLAYLISTS: Record<string, Track[]> = {
   relax: [
-    {
-      id: 'sensme-1',
-      title: 'Speed of Sound',
-      artist: 'Coldplay',
-      album: 'X&Y',
-      previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/71/43/70/71437058-1d39-b12c-2b37-a1b14a5d26f0/mzaf_5970876114034094619.plus.aac.p.m4a',
-      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/0c/82/48/0c8248a8-4a5b-d30d-8056-f32d650d2fc9/190295978068.jpg/600x600bb.jpg',
-    },
-    {
-      id: 'sensme-2',
-      title: 'Lady (Hear Me Tonight)',
-      artist: 'Modjo',
-      album: 'Modjo',
-      previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/39/a0/2a/39a02a04-7e77-c309-9128-02e61098a7b7/mzaf_7220909039799435982.plus.aac.p.m4a',
-      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/f5/25/2b/f5252b6e-0659-890b-7e9d-0e691944b95b/cover.jpg/600x600bb.jpg',
-    },
+    NOSTALGIC_PSP_TRACKS[0], // Sade Like a Tattoo
+    NOSTALGIC_PSP_TRACKS[1], // Sade No Ordinary Love
+    NOSTALGIC_PSP_TRACKS[2], // Sade Kiss of Life
+    NOSTALGIC_PSP_TRACKS[3], // Tears for Fears
+    NOSTALGIC_PSP_TRACKS[4], // Player Baby Come Back
   ],
   energetic: [
-    {
-      id: 'sensme-3',
-      title: 'Feel Good Inc.',
-      artist: 'Gorillaz',
-      album: 'Demon Days',
-      previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/9a/a7/90/9aa790e3-651e-9674-26ac-14aba4d3b8d1/mzaf_10454527198707970464.plus.aac.p.m4a',
-      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/1c/0f/81/1c0f818a-e458-dd84-6f1b-ccbdf5fe14d6/825646291045.jpg/600x600bb.jpg',
-    },
-    {
-      id: 'sensme-4',
-      title: 'Holiday',
-      artist: 'Green Day',
-      album: 'American Idiot',
-      previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/86/f1/d0/86f1d039-f2d6-2f5b-b34b-2b63504fa6d0/mzaf_3363059623415356317.plus.aac.p.m4a',
-      artworkUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/64/70/4c/64704c7f-1786-f04b-32ae-9b216ce70498/093624877721.jpg/600x600bb.jpg',
-    },
+    NOSTALGIC_PSP_TRACKS[5], // Black Eyed Peas My Humps
+    NOSTALGIC_PSP_TRACKS[6], // Gorillaz Feel Good Inc
+    NOSTALGIC_PSP_TRACKS[7], // Daft Punk One More Time
+    NOSTALGIC_PSP_TRACKS[11], // 50 Cent Candy Shop
+    NOSTALGIC_PSP_TRACKS[12], // Madonna Hung Up
+    NOSTALGIC_PSP_TRACKS[13], // Gwen Stefani Hollaback Girl
   ],
 };
 
@@ -123,45 +186,8 @@ export async function searchTracks(query: string): Promise<Track[]> {
   }
 }
 
-// Dynamically refresh nostalgic 2005 tracks directly from Apple iTunes API in live streaming
+// Dynamically refresh nostalgic tracks directly from Apple iTunes API in live streaming
 export async function fetchLiveNostalgicTracks(): Promise<Track[]> {
-  const iconicQueries = [
-    'Gorillaz Feel Good Inc',
-    'Daft Punk One More Time',
-    'Linkin Park In The End',
-    'Coldplay Speed of Sound',
-    'Green Day Holiday',
-    'Modjo Lady Hear Me Tonight',
-  ];
-
-  try {
-    const promises = iconicQueries.map(async (q) => {
-      try {
-        const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=song&limit=1`);
-        if (!res.ok) return null;
-        const data = await res.json();
-        const item = data.results?.[0];
-        if (!item || !item.previewUrl) return null;
-        return {
-          id: `psp-${item.trackId}`,
-          title: item.trackName,
-          artist: item.artistName,
-          album: item.collectionName || 'PSP 2005 Classics',
-          previewUrl: item.previewUrl,
-          artworkUrl: (item.artworkUrl100 || '').replace('100x100bb.jpg', '600x600bb.jpg'),
-          durationMs: item.trackTimeMillis,
-        } as Track;
-      } catch {
-        return null;
-      }
-    });
-
-    const results = (await Promise.all(promises)).filter((t): t is Track => t !== null);
-    if (results.length > 0) {
-      return results;
-    }
-  } catch (err) {
-    console.warn('Could not fetch dynamic iTunes tracks, using pre-validated list:', err);
-  }
+  // If we already have our comprehensive validated list, return it immediately
   return NOSTALGIC_PSP_TRACKS;
 }

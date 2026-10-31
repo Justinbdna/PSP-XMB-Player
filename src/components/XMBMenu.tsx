@@ -302,6 +302,16 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     setTimeout(() => setInfoPopup(null), 3500);
   };
 
+  // Handle Home Button (Retour au menu racine PSP)
+  const handleHome = () => {
+    sound.playBack();
+    setInSubLevel(false);
+    setItemIndex(0);
+    setSubItemIndex(0);
+    setIsSearchModalOpen(false);
+    setInfoPopup(null);
+  };
+
   // Handle Search Execution
   const executeSearch = async (queryText: string) => {
     if (!queryText.trim()) return;
@@ -328,6 +338,8 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       handleOptions();
     } else if (action === 'square') {
       togglePlay();
+    } else if (action === 'home') {
+      handleHome();
     }
   }, [externalCommand]);
 
@@ -363,6 +375,9 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       } else if (key === 's' || e.key === ' ') {
         e.preventDefault();
         togglePlay();
+      } else if (key === 'h' || e.key === 'Home') {
+        e.preventDefault();
+        handleHome();
       }
     };
 
@@ -520,7 +535,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                     <img
                       src={track.artworkUrl}
                       alt={track.title}
-                      className="w-8 h-8 rounded object-cover flex-shrink-0 shadow border border-white/20"
+                      className="w-9 h-9 rounded object-cover flex-shrink-0 shadow border border-white/20"
                     />
                     <div className="flex flex-col min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
@@ -545,13 +560,13 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         )}
       </div>
 
-      {/* 4. NOW PLAYING FLOATING MINI-PLAYER (Bottom-Right) */}
+      {/* 4. NOW PLAYING FLOATING MINI-PLAYER (Bottom-Right) - Carré de pochette agrandi */}
       {currentTrack && (
-        <div className="absolute right-4 bottom-10 w-64 p-2.5 rounded-xl bg-black/45 backdrop-blur-md border border-white/20 shadow-2xl flex items-center gap-3 z-20">
+        <div className="absolute right-4 bottom-8 w-68 p-2.5 rounded-xl bg-black/55 backdrop-blur-md border border-white/20 shadow-2xl flex items-center gap-3 z-20">
           <img
             src={currentTrack.artworkUrl}
             alt={currentTrack.title}
-            className={`w-11 h-11 rounded-lg object-cover shadow border border-white/30 ${
+            className={`w-14 h-14 rounded-lg object-cover shadow-lg border border-white/30 flex-shrink-0 ${
               isPlaying ? 'animate-pulse' : ''
             }`}
           />
@@ -563,7 +578,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
               {currentTrack.artist}
             </span>
             {/* Progress bar */}
-            <div className="w-full bg-white/20 h-1 rounded-full mt-1.5 overflow-hidden">
+            <div className="w-full bg-white/20 h-1.5 rounded-full mt-2 overflow-hidden">
               <div
                 className="bg-emerald-400 h-full transition-all duration-300"
                 style={{ width: `${(currentTime / (duration || 30)) * 100}%` }}
@@ -625,27 +640,27 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         </div>
       )}
 
-      {/* 7. BOTTOM ACTION CONTROLS HINTS */}
-      <div className="absolute bottom-2 left-4 right-4 flex items-center justify-between text-[10px] text-white/75 font-medium z-20">
-        <div className="flex items-center gap-4">
+      {/* 7. BOTTOM ACTION CONTROLS HINTS - Placée plus bas vers le bord */}
+      <div className="absolute bottom-1 left-4 right-4 flex items-center justify-between text-[9px] text-white/60 font-medium z-20 pointer-events-none">
+        <div className="flex items-center gap-3.5">
           <span className="flex items-center gap-1">
-            <PSGlyph type="cross" size={13} />
+            <PSGlyph type="cross" size={12} />
             <span>Valider (X)</span>
           </span>
           <span className="flex items-center gap-1">
-            <PSGlyph type="circle" size={13} />
+            <PSGlyph type="circle" size={12} />
             <span>Retour (O)</span>
           </span>
           <span className="flex items-center gap-1">
-            <PSGlyph type="triangle" size={13} />
+            <PSGlyph type="triangle" size={12} />
             <span>Options (A)</span>
           </span>
           <span className="flex items-center gap-1">
-            <PSGlyph type="square" size={13} />
+            <PSGlyph type="square" size={12} />
             <span>Play/Pause (S)</span>
           </span>
         </div>
-        <div className="text-white/40 text-[9px]">
+        <div className="text-white/35 text-[8.5px] font-mono">
           PSP™ PlayStation Portable
         </div>
       </div>
