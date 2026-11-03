@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, createContext, useContext } from 'react';
 import { Track } from '../types/xmb';
+import { saveTrackToHistory } from '../services/itunes';
 
 interface AudioContextType {
   currentTrack: Track | null;
@@ -11,6 +12,7 @@ interface AudioContextType {
   playTrack: (track: Track) => void;
   pauseTrack: () => void;
   togglePlay: () => void;
+  seekRelative: (deltaSeconds: number) => void;
   setVolume: (val: number) => void;
   adjustVolume: (delta: number) => void;
 }
@@ -85,6 +87,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const playTrack = (track: Track) => {
     if (!audioRef.current) return;
+    saveTrackToHistory(track);
+
     if (currentTrack?.id === track.id) {
       if (audioRef.current.paused) {
         audioRef.current.play().catch((err) => console.warn('Play prevented:', err));
@@ -115,6 +119,13 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } else {
       audioRef.current.play().catch((err) => console.warn('Resume failed:', err));
     }
+  };
+
+  const seekRelative = (deltaSeconds: number) => {
+    if (!audioRef.current) return;
+    const nextTime = Math.max(0, Math.min(duration, audioRef.current.currentTime + deltaSeconds));
+    audioRef.current.currentTime = nextTime;
+    setCurrentTime(nextTime);
   };
 
   const setVolume = (val: number) => {
@@ -149,6 +160,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         playTrack,
         pauseTrack,
         togglePlay,
+        seekRelative,
         setVolume,
         adjustVolume,
       }}
