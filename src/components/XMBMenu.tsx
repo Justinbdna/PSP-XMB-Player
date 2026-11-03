@@ -80,6 +80,9 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   const [historyTracks, setHistoryTracks] = useState<Track[]>([]);
   const [searchResults, setSearchResults] = useState<Track[]>([]);
 
+  // Contextual options side panel (Touche Triangle)
+  const [isOptionsOpen, setIsOptionsOpen] = useState<boolean>(false);
+
   // Search modal state
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isSearching, setIsSearching] = useState<boolean>(false);
@@ -211,6 +214,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     isVideoPlaying,
     gamesList,
     currentGame,
+    isOptionsOpen,
     isSearchModalOpen,
     currentTrack,
   });
@@ -231,6 +235,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       isVideoPlaying,
       gamesList,
       currentGame,
+      isOptionsOpen,
       isSearchModalOpen,
       currentTrack,
     };
@@ -255,23 +260,32 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     setViewMode(newView);
     if (nextSubListType) setSubListType(nextSubListType);
     setSubItemIndex(0);
+    setIsOptionsOpen(false);
   };
 
-  // Pop state stack (Circle button / Escape)
+  // Pop state stack (Touche Rond ◯ / Échap / Backspace)
+  // Quitte le lecteur pour revenir à la liste XMB SANS COUPER LE SON en arrière-plan
   const popState = () => {
     sound.playBack();
     const current = stateRef.current;
+
+    // Si le volet latéral d'options est ouvert, le fermer en priorité
+    if (current.isOptionsOpen) {
+      setIsOptionsOpen(false);
+      return;
+    }
 
     if (current.isSearchModalOpen) {
       setIsSearchModalOpen(false);
       return;
     }
+
     if (infoPopup) {
       setInfoPopup(null);
       return;
     }
 
-    // Stop video playback when quitting video player
+    // Si on quitte le lecteur vidéo, on stoppe la vidéo
     if (current.viewMode === 'video_player') {
       if (videoRef.current) {
         videoRef.current.pause();
@@ -279,6 +293,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       setIsVideoPlaying(false);
     }
 
+    // Remonter d'un cran dans l'arborescence (sans couper la musique en arrière-plan)
     if (current.navStack.length > 0) {
       const last = current.navStack[current.navStack.length - 1];
       setNavStack((prev) => prev.slice(0, -1));
@@ -305,22 +320,25 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     setViewMode('menu');
     setItemIndex(0);
     setSubItemIndex(0);
+    setIsOptionsOpen(false);
     setIsSearchModalOpen(false);
     setInfoPopup(null);
   };
 
-  // Navigation logic
+  // Refactorisation stricte de la navigation directionnelle selon la logique Sony
   const handleNav = (dir: 'left' | 'right' | 'up' | 'down') => {
     const s = stateRef.current;
     if (s.isSearchModalOpen) return;
 
-    // In Game Screen: directions reserved for gameplay, or options
-    if (s.viewMode === 'game_screen') {
-      sound.playTick();
+    // Si le volet d'options est ouvert, fermer avec gauche/droite
+    if (s.isOptionsOpen) {
+      if (dir === 'left' || dir === 'right') {
+        setIsOptionsOpen(false);
+      }
       return;
     }
 
-    // In Video Player View: Left/Right seeks -5s/+5s, triggers HUD
+    // 1. DEDICATED VIDEO PLAYER: Left/Right seeks -5s/+5s, triggers HUD
     if (s.viewMode === 'video_player') {
       triggerVideoHUD();
       if (videoRef.current) {
@@ -338,7 +356,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       return;
     }
 
-    // In Dedicated Audio Player View: Left/Right seeks -5s/+5s
+    // 2. DEDICATED AUDIO PLAYER: Left/Right seeks -5s/+5s
     if (s.viewMode === 'player') {
       if (dir === 'left') {
         sound.playTick();
@@ -350,62 +368,16 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       return;
     }
 
-    if (dir === 'left') {
-      if (s.viewMode === 'sublist') {
-        popState();
-        return;
-      }
+    // 3. GAME SCREEN: Touches réservées au gameplay
+    if (s.viewMode === 'game_screen') {
       sound.playTick();
-      setCatIndex((prev) => (prev > 0 ? prev - 1 : s.categories.length - 1));
-      setItemIndex(0);
-    } else if (dir === 'right') {
-      if (s.viewMode === 'sublist') {
-        if (s.subListType === 'game') {
-          const game = s.gamesList[s.subItemIndex];
-          if (game) {
-            sound.playEnter();
-            pauseTrack();
-            setCurrentGame(game);
-            pushState('game_screen', 'game');
-          }
-          return;
-        }
-        if (s.subListType === 'video') {
-          const video = s.videosList[s.subItemIndex];
-          if (video) {
-            sound.playEnter();
-            pauseTrack();
-            setCurrentVideo(video);
-            setIsVideoPlaying(true);
-            pushState('video_player', 'video');
-          }
-          return;
-        }
-        const track = s.currentSubList[s.subItemIndex];
-        if (track) {
-          sound.playEnter();
-          playTrack(track);
-          pushState('player');
-        }
-        return;
-      }
-      const curItem = s.activeItems[s.itemIndex];
-      if (curItem?.type === 'folder') {
-        sound.playEnter();
-        let targetType: 'ms' | 'sensme' | 'history' | 'video' | 'game' = 'ms';
-        if (curItem.id === 'music-sensme') targetType = 'sensme';
-        if (curItem.id === 'history-list') targetType = 'history';
-        if (curItem.id === 'video-ms') targetType = 'video';
-        if (curItem.id === 'game-ms') targetType = 'game';
-        pushState('sublist', targetType);
-        return;
-      }
-      sound.playTick();
-      setCatIndex((prev) => (prev < s.categories.length - 1 ? prev + 1 : 0));
-      setItemIndex(0);
-    } else if (dir === 'up') {
-      sound.playTick();
-      if (s.viewMode === 'sublist') {
+      return;
+    }
+
+    // 4. AU SEIN D'UN SOUS-DOSSIER (SUBLIST)
+    if (s.viewMode === 'sublist') {
+      if (dir === 'up') {
+        sound.playTick();
         const listLength =
           s.subListType === 'game'
             ? s.gamesList.length
@@ -413,12 +385,8 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
             ? s.videosList.length
             : s.currentSubList.length;
         setSubItemIndex((prev) => (prev > 0 ? prev - 1 : Math.max(0, listLength - 1)));
-      } else {
-        setItemIndex((prev) => (prev > 0 ? prev - 1 : Math.max(0, s.activeItems.length - 1)));
-      }
-    } else if (dir === 'down') {
-      sound.playTick();
-      if (s.viewMode === 'sublist') {
+      } else if (dir === 'down') {
+        sound.playTick();
         const listLength =
           s.subListType === 'game'
             ? s.gamesList.length
@@ -426,13 +394,38 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
             ? s.videosList.length
             : s.currentSubList.length;
         setSubItemIndex((prev) => (prev < listLength - 1 ? prev + 1 : 0));
-      } else {
+      } else if (dir === 'left') {
+        popState();
+      }
+      // INTERDICTION FORMELLE : La flèche Droite ne lance RIEN et ne valide RIEN en sous-dossier !
+      return;
+    }
+
+    // 5. AU NIVEAU RACINE DU XMB (quand aucun dossier n'est ouvert : viewMode === 'menu')
+    if (s.viewMode === 'menu') {
+      if (dir === 'left') {
+        sound.playTick();
+        // Déplace la sélection vers la catégorie horizontale précédente. Ne valide rien.
+        setCatIndex((prev) => (prev > 0 ? prev - 1 : s.categories.length - 1));
+        setItemIndex(0);
+      } else if (dir === 'right') {
+        sound.playTick();
+        // Déplace la sélection vers la catégorie horizontale suivante. Ne valide rien et n'entre JAMAIS dans un dossier.
+        setCatIndex((prev) => (prev < s.categories.length - 1 ? prev + 1 : 0));
+        setItemIndex(0);
+      } else if (dir === 'up') {
+        sound.playTick();
+        // Fait défiler verticalement les éléments de la catégorie active
+        setItemIndex((prev) => (prev > 0 ? prev - 1 : Math.max(0, s.activeItems.length - 1)));
+      } else if (dir === 'down') {
+        sound.playTick();
+        // Fait défiler verticalement les éléments de la catégorie active
         setItemIndex((prev) => (prev < s.activeItems.length - 1 ? prev + 1 : 0));
       }
     }
   };
 
-  // Validation logic (Cross button / Enter)
+  // Touche Croix (✕ / Entrée) : Entrer dans un dossier ou lancer la lecture plein écran
   const handleValidate = () => {
     const s = stateRef.current;
     if (s.isSearchModalOpen) return;
@@ -496,7 +489,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       return;
     }
 
-    // 5. In Main XMB Menu
+    // 5. In Main XMB Menu (Validation de dossier ou action)
     const currentItem = s.activeItems[s.itemIndex];
     if (!currentItem) return;
 
@@ -535,63 +528,34 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     }
   };
 
-  // Options / Triangle
+  // Touche Triangle (△ / Touche A) : Ouvrir / fermer le volet latéral d'options contextuelles
   const handleOptions = () => {
-    const s = stateRef.current;
     sound.playOption();
-    if (s.viewMode === 'game_screen' && currentGame) {
-      setInfoPopup(
-        `Jeu UMD : ${currentGame.title}\nÉditeur : ${currentGame.publisher || 'SCE'}\nGenre : ${currentGame.genre || 'Arcade'}\nTaille : ${currentGame.size || '14.2 MB'}\nSystème : Compatible PSP v6.61`
-      );
-    } else if (s.viewMode === 'video_player' && currentVideo) {
-      triggerVideoHUD();
-      setInfoPopup(
-        `Clip Vidéo : ${currentVideo.title}\nFormat : ${currentVideo.codec || 'MPEG-4 AVC / H.264'}\nRésolution : 480 × 272 (16:9)\nSource : Local PSP Storage`
-      );
-    } else if (s.viewMode === 'player' && currentTrack) {
-      setInfoPopup(
-        `Morceau : ${currentTrack.title}\nArtiste : ${currentTrack.artist}\nAlbum : ${currentTrack.album}\nFormat : Audio AAC 256kbps 44.1kHz`
-      );
-    } else if (s.viewMode === 'sublist') {
-      if (s.subListType === 'game') {
-        const game = s.gamesList[s.subItemIndex];
-        if (game) {
-          setInfoPopup(
-            `Titre : ${game.title}\nÉditeur : ${game.publisher || 'SCE'}\nGenre : ${game.genre || 'Arcade'}\nTaille : ${game.size || '14.2 MB'}`
-          );
-        }
-      } else if (s.subListType === 'video') {
-        const video = s.videosList[s.subItemIndex];
-        if (video) {
-          setInfoPopup(
-            `Titre : ${video.title}\nArtiste : ${video.artist || 'Sélection Personnelle'}\nDurée : ${video.duration || '--:--'}\nCodec : ${video.codec || 'MPEG-4'}`
-          );
-        }
-      } else {
-        const track = s.currentSubList[s.subItemIndex];
-        if (track) {
-          setInfoPopup(`Titre : ${track.title}\nArtiste : ${track.artist}\nAlbum : ${track.album}`);
-        }
-      }
-    } else {
-      setInfoPopup(`Système : Sony PSP Street (E1000)\nVersion : 6.61\nCatégorie : ${activeCategory.name}`);
-    }
-    setTimeout(() => setInfoPopup(null), 3500);
+    setIsOptionsOpen((prev) => !prev);
   };
 
-  // Square (□) action: switch to/from Player or Play/Pause
+  // Touche Carré (▢ / Touche Espace) : Déclencher immédiatement la bascule Play / Pause
   const handleSquare = () => {
-    const s = stateRef.current;
     sound.playTick();
+    const s = stateRef.current;
     if (s.viewMode === 'video_player') {
-      handleValidate();
-    } else if (s.viewMode === 'player') {
+      if (videoRef.current) {
+        if (videoRef.current.paused) {
+          videoRef.current.play().catch(console.warn);
+          setIsVideoPlaying(true);
+        } else {
+          videoRef.current.pause();
+          setIsVideoPlaying(false);
+        }
+      }
+      return;
+    }
+
+    // Bascule Play / Pause audio immédiate partout (lecteur, menu ou sous-dossier)
+    if (s.currentTrack) {
       togglePlay();
-    } else if (currentTrack) {
-      pushState('player');
     } else if (nostalgicTracks.length > 0) {
       playTrack(nostalgicTracks[0]);
-      pushState('player');
     }
   };
 
@@ -694,7 +658,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         </div>
 
         <div className="flex items-center gap-2.5">
-          {isPlaying && viewMode !== 'player' && viewMode !== 'video_player' && viewMode !== 'game_screen' && (
+          {isPlaying && viewMode !== 'player' && (
             <div
               onClick={() => pushState('player')}
               className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/15 cursor-pointer hover:bg-white/20 animate-pulse"
@@ -723,7 +687,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
           id="psp-game-viewport"
           className="absolute inset-0 bg-[#07090e] z-20 flex flex-col justify-between p-4 overflow-hidden animate-fade-in"
         >
-          {/* Subtle retro arcade grid & horizon scanlines */}
+          {/* Retro arcade grid & horizon scanlines */}
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(16,185,129,0.15),transparent_70%)] pointer-events-none" />
           <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent_50%,rgba(0,0,0,0.35)_51%)] bg-[length:100%_4px] pointer-events-none opacity-50" />
 
@@ -1241,14 +1205,107 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         </div>
       )}
 
-      {/* 7. INFO POPUP NOTIFICATION */}
+      {/* 7. VOLET LATÉRAL D'OPTIONS CONTEXTUELLES (Touche Triangle △ / A) */}
+      {isOptionsOpen && (
+        <div className="absolute top-0 right-0 bottom-0 w-48 bg-gradient-to-l from-black/95 via-black/90 to-black/60 backdrop-blur-md border-l border-white/20 p-3 z-40 flex flex-col justify-between animate-fade-in shadow-2xl">
+          <div>
+            <div className="flex items-center justify-between border-b border-white/15 pb-1.5 mb-2.5">
+              <span className="text-[10px] font-bold tracking-wider text-emerald-400 flex items-center gap-1.5">
+                <PSGlyph type="triangle" size={10} />
+                OPTIONS
+              </span>
+              <button
+                onClick={() => setIsOptionsOpen(false)}
+                className="text-white/50 hover:text-white text-[10px] px-1 rounded bg-white/10"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Context details */}
+            <div className="flex flex-col gap-2 text-[9px]">
+              {viewMode === 'player' && currentTrack ? (
+                <>
+                  <div>
+                    <span className="text-white/40 block text-[7.5px] uppercase">Titre</span>
+                    <span className="font-semibold text-white truncate block">{currentTrack.title}</span>
+                  </div>
+                  <div>
+                    <span className="text-white/40 block text-[7.5px] uppercase">Artiste</span>
+                    <span className="text-white/80 truncate block">{currentTrack.artist}</span>
+                  </div>
+                  <div>
+                    <span className="text-white/40 block text-[7.5px] uppercase">Format</span>
+                    <span className="text-emerald-300 font-mono text-[8px]">AAC 256kbps • 44.1kHz</span>
+                  </div>
+                </>
+              ) : viewMode === 'video_player' && currentVideo ? (
+                <>
+                  <div>
+                    <span className="text-white/40 block text-[7.5px] uppercase">Clip Vidéo</span>
+                    <span className="font-semibold text-white truncate block">{currentVideo.title}</span>
+                  </div>
+                  <div>
+                    <span className="text-white/40 block text-[7.5px] uppercase">Codec</span>
+                    <span className="text-cyan-300 font-mono text-[8px]">{currentVideo.codec || 'MPEG-4 AVC'}</span>
+                  </div>
+                  <div>
+                    <span className="text-white/40 block text-[7.5px] uppercase">Résolution</span>
+                    <span className="text-white/70 font-mono text-[8px]">480 × 272 (16:9)</span>
+                  </div>
+                </>
+              ) : viewMode === 'game_screen' && currentGame ? (
+                <>
+                  <div>
+                    <span className="text-white/40 block text-[7.5px] uppercase">Jeu UMD</span>
+                    <span className="font-semibold text-white truncate block">{currentGame.title}</span>
+                  </div>
+                  <div>
+                    <span className="text-white/40 block text-[7.5px] uppercase">Éditeur</span>
+                    <span className="text-emerald-300 text-[8px]">{currentGame.publisher || 'SCE'}</span>
+                  </div>
+                  <div>
+                    <span className="text-white/40 block text-[7.5px] uppercase">Genre / Taille</span>
+                    <span className="text-white/70 font-mono text-[8px]">{currentGame.genre} • {currentGame.size}</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <span className="text-white/40 block text-[7.5px] uppercase">Système</span>
+                    <span className="font-semibold text-white block">Sony PSP Street</span>
+                  </div>
+                  <div>
+                    <span className="text-white/40 block text-[7.5px] uppercase">Firmware</span>
+                    <span className="text-white/70 font-mono text-[8px]">v6.61 (Authentique)</span>
+                  </div>
+                  <div>
+                    <span className="text-white/40 block text-[7.5px] uppercase">Catégorie active</span>
+                    <span className="text-white/80 block">{activeCategory.name}</span>
+                  </div>
+                  <div>
+                    <span className="text-white/40 block text-[7.5px] uppercase">Volume principal</span>
+                    <span className="text-white/70 font-mono text-[8px]">{Math.round(volume * 30)} / 30</span>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-white/10 text-[7.5px] text-white/40 font-mono">
+            △ ou ◯ pour fermer
+          </div>
+        </div>
+      )}
+
+      {/* 8. INFO POPUP NOTIFICATION */}
       {infoPopup && (
         <div className="absolute top-12 right-4 max-w-xs bg-black/90 backdrop-blur-md border border-white/25 rounded-xl p-2.5 text-[10px] text-white shadow-2xl z-40 animate-fade-in whitespace-pre-line">
           {infoPopup}
         </div>
       )}
 
-      {/* 8. BOTTOM CONTROLS BAR (Calée au bas de l'écran LCD) */}
+      {/* 9. BOTTOM CONTROLS BAR (Calée au bas de l'écran LCD) */}
       <div className="absolute bottom-1 left-3 right-3 flex items-center justify-between text-[8.5px] text-white/60 font-medium z-30 pointer-events-none">
         {viewMode === 'game_screen' ? (
           <div className="flex items-center gap-3">
@@ -1262,7 +1319,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
             </span>
             <span className="flex items-center gap-1">
               <PSGlyph type="triangle" size={11} />
-              <span>Info UMD</span>
+              <span>Options</span>
             </span>
           </div>
         ) : viewMode === 'video_player' ? (
@@ -1277,7 +1334,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
             </span>
             <span className="flex items-center gap-1">
               <PSGlyph type="triangle" size={11} />
-              <span>Info UMD</span>
+              <span>Options</span>
             </span>
             <span className="text-white/40">◀/▶ Reculer/Avancer (5s)</span>
           </div>
@@ -1291,25 +1348,29 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
               <PSGlyph type="circle" size={11} />
               <span>Retour XMB</span>
             </span>
+            <span className="flex items-center gap-1">
+              <PSGlyph type="triangle" size={11} />
+              <span>Options</span>
+            </span>
             <span className="text-white/40">◀/▶ Reculer/Avancer (5s)</span>
           </div>
         ) : (
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1">
               <PSGlyph type="cross" size={11} />
-              <span>Valider</span>
+              <span>Valider / Entrer</span>
             </span>
             <span className="flex items-center gap-1">
               <PSGlyph type="circle" size={11} />
               <span>Retour</span>
             </span>
             <span className="flex items-center gap-1">
-              <PSGlyph type="triangle" size={11} />
-              <span>Options</span>
+              <PSGlyph type="square" size={11} />
+              <span>Play / Pause</span>
             </span>
             <span className="flex items-center gap-1">
-              <PSGlyph type="square" size={11} />
-              <span>Lecteur</span>
+              <PSGlyph type="triangle" size={11} />
+              <span>Options</span>
             </span>
           </div>
         )}
