@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { WaveBackground } from './WaveBackground';
 import { XMBMenu } from './XMBMenu';
-import { PSPTheme, PSP_MONTHLY_THEMES } from '../types/xmb';
+import { PSPTheme, PSP_OFFICIAL_THEMES } from '../types/xmb';
 import { useAudio } from './AudioEngine';
 import { sound } from '../services/sound';
 import { useGamepad } from '../hooks/useGamepad';
@@ -20,10 +20,41 @@ export const PSP_CHASSIS_CONFIG = {
 };
 
 export const PSPConsole: React.FC = () => {
-  const currentMonth = new Date().getMonth() + 1;
-  const [theme, setTheme] = useState<PSPTheme>(
-    PSP_MONTHLY_THEMES[currentMonth] || PSP_MONTHLY_THEMES[10]
-  );
+  // Initialisation du thème officiel depuis le localStorage ou Novembre par défaut
+  const getInitialTheme = (): PSPTheme => {
+    try {
+      const savedKey = localStorage.getItem('psp_wave_theme');
+      if (savedKey && PSP_OFFICIAL_THEMES[savedKey]) {
+        return PSP_OFFICIAL_THEMES[savedKey];
+      }
+    } catch {
+      // Ignorer erreur localStorage
+    }
+    return PSP_OFFICIAL_THEMES.novembre;
+  };
+
+  const [theme, setThemeState] = useState<PSPTheme>(getInitialTheme);
+
+  // Sauvegarde et mise à jour du thème dans le Canvas & localStorage
+  const setTheme = useCallback((newTheme: PSPTheme) => {
+    setThemeState(newTheme);
+    try {
+      if (newTheme.id) {
+        localStorage.setItem('psp_wave_theme', newTheme.id);
+      }
+    } catch (e) {
+      console.warn('Erreur de persistance du thème:', e);
+    }
+  }, []);
+
+  const cycleOfficialTheme = useCallback(() => {
+    sound.playTick();
+    const themesList = Object.values(PSP_OFFICIAL_THEMES);
+    const currentIndex = themesList.findIndex((t) => t.id === theme.id);
+    const nextTheme = themesList[(currentIndex + 1) % themesList.length];
+    setTheme(nextTheme);
+  }, [theme, setTheme]);
+
   const [externalCommand, setExternalCommand] = useState<{
     action: string;
     timestamp: number;
@@ -76,9 +107,7 @@ export const PSPConsole: React.FC = () => {
       sendCommand('triangle');
     },
     onSelect: () => {
-      sound.playTick();
-      const next = (theme.month % 12) + 1;
-      setTheme(PSP_MONTHLY_THEMES[next]);
+      cycleOfficialTheme();
     },
     onStart: () => {
       togglePlay();
@@ -188,6 +217,7 @@ export const PSPConsole: React.FC = () => {
                 currentTheme={theme}
                 onThemeChange={setTheme}
                 externalCommand={externalCommand}
+                debugHitboxes={debugHitboxes}
               />
 
               {/* Authentic PSP Volume OSD Overlay */}
@@ -377,14 +407,10 @@ export const PSPConsole: React.FC = () => {
             style={getHitboxStyle({ top: '92%', left: '38.6%', width: '4.5%', height: '6%', borderRadius: '4px' })}
           />
 
-          {/* SELECT : left 66.5%, top 92%, width 6%, height 6% */}
+          {/* SELECT : change le thème officiel en boucle */}
           <button
-            onClick={() => {
-              sound.playTick();
-              const next = (theme.month % 12) + 1;
-              setTheme(PSP_MONTHLY_THEMES[next]);
-            }}
-            title="SELECT (Changer le thème)"
+            onClick={cycleOfficialTheme}
+            title="SELECT (Changer le thème officiel)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
             style={getHitboxStyle({ top: '92%', left: '66.5%', width: '6%', height: '6%', borderRadius: '4px' })}
           />

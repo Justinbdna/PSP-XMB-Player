@@ -16,6 +16,8 @@ export interface VideoItem {
   url: string;
   duration?: string;
   codec?: string;
+  fileSizeBytes?: number;
+  sizeDisplay?: string;
 }
 
 export interface GameItem {
@@ -46,6 +48,7 @@ export interface XMBCategory {
 }
 
 export interface PSPTheme {
+  id?: string;
   name: string;
   month: number;
   bgGradient: [string, string];
@@ -53,6 +56,54 @@ export interface PSPTheme {
   waveColor2: string;
   waveColor3: string;
 }
+
+export const PSP_OFFICIAL_THEMES: Record<string, PSPTheme> = {
+  novembre: {
+    id: 'novembre',
+    name: 'Novembre (Ambre / Bronze)',
+    month: 11,
+    bgGradient: ['#331c15', '#140805'],
+    waveColor1: 'rgba(215, 110, 75, 0.35)',
+    waveColor2: 'rgba(175, 75, 45, 0.25)',
+    waveColor3: 'rgba(245, 160, 130, 0.15)',
+  },
+  juillet: {
+    id: 'juillet',
+    name: 'Juillet (Bleu Lagon)',
+    month: 7,
+    bgGradient: ['#0d2b45', '#04101e'],
+    waveColor1: 'rgba(50, 170, 245, 0.35)',
+    waveColor2: 'rgba(25, 125, 200, 0.25)',
+    waveColor3: 'rgba(125, 215, 255, 0.15)',
+  },
+  avril: {
+    id: 'avril',
+    name: 'Avril (Rose Sakura)',
+    month: 4,
+    bgGradient: ['#3e1c2d', '#180710'],
+    waveColor1: 'rgba(240, 130, 180, 0.35)',
+    waveColor2: 'rgba(210, 95, 145, 0.25)',
+    waveColor3: 'rgba(255, 180, 215, 0.15)',
+  },
+  decembre: {
+    id: 'decembre',
+    name: 'Décembre (Rouge Rubis)',
+    month: 12,
+    bgGradient: ['#3a0f18', '#160307'],
+    waveColor1: 'rgba(235, 60, 85, 0.35)',
+    waveColor2: 'rgba(190, 30, 55, 0.25)',
+    waveColor3: 'rgba(255, 125, 145, 0.15)',
+  },
+  midnight: {
+    id: 'midnight',
+    name: 'Midnight (Noir profond & reflets argent)',
+    month: 0,
+    bgGradient: ['#14171d', '#05070a'],
+    waveColor1: 'rgba(180, 195, 215, 0.35)',
+    waveColor2: 'rgba(130, 145, 165, 0.25)',
+    waveColor3: 'rgba(220, 235, 255, 0.15)',
+  },
+};
 
 export const PSP_MONTHLY_THEMES: Record<number, PSPTheme> = {
   1: {
