@@ -18,6 +18,17 @@ export interface VideoItem {
   codec?: string;
 }
 
+export interface GameItem {
+  id: string;
+  title: string;
+  publisher?: string;
+  sublabel?: string;
+  description?: string;
+  genre?: string;
+  size?: string;
+  icon?: string;
+}
+
 export interface XMBItem {
   id: string;
   label: string;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { XMBCategory, Track, VideoItem, PSPTheme, PSP_MONTHLY_THEMES } from '../types/xmb';
+import { XMBCategory, Track, VideoItem, GameItem, PSPTheme, PSP_MONTHLY_THEMES } from '../types/xmb';
 import { CategoryIcon, PSGlyph, SensMeIcon } from './XMBIcons';
 import {
   NOSTALGIC_PSP_TRACKS,
@@ -9,18 +9,19 @@ import {
   clearListeningHistory,
 } from '../services/itunes';
 import videosData from '../data/videos.json';
+import gamesData from '../data/games.json';
 import { sound } from '../services/sound';
 import { useAudio } from './AudioEngine';
 import { AudioVisualizer } from './AudioVisualizer';
 
-export type XMBViewMode = 'menu' | 'sublist' | 'player' | 'video_player';
+export type XMBViewMode = 'menu' | 'sublist' | 'player' | 'video_player' | 'game_screen';
 
 interface NavigationFrame {
   view: XMBViewMode;
   catIndex: number;
   itemIndex: number;
   subItemIndex: number;
-  subListType?: 'ms' | 'sensme' | 'history' | 'search_results' | 'video';
+  subListType?: 'ms' | 'sensme' | 'history' | 'search_results' | 'video' | 'game';
 }
 
 interface XMBMenuProps {
@@ -55,7 +56,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   const [itemIndex, setItemIndex] = useState<number>(0); // Default to 'Memory Stick™'
   const [subItemIndex, setSubItemIndex] = useState<number>(0);
   const [subListType, setSubListType] = useState<
-    'ms' | 'sensme' | 'history' | 'search_results' | 'video'
+    'ms' | 'sensme' | 'history' | 'search_results' | 'video' | 'game'
   >('ms');
 
   // Video playback state
@@ -69,6 +70,10 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   const [showVideoHUD, setShowVideoHUD] = useState<boolean>(true);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const hudTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Games state
+  const [gamesList] = useState<GameItem[]>(gamesData as GameItem[]);
+  const [currentGame, setCurrentGame] = useState<GameItem | null>(null);
 
   // Dynamic tracks state
   const [nostalgicTracks] = useState<Track[]>(NOSTALGIC_PSP_TRACKS);
@@ -120,7 +125,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     return () => clearInterval(interval);
   }, []);
 
-  // Strict 5-Category XMB Hierarchy (Paramètres, Musique, Vidéo, Recherche, Historique)
+  // Strict 6-Category XMB Hierarchy (Paramètres, Musique, Jeu, Vidéo, Recherche, Historique)
   const categories: XMBCategory[] = [
     {
       id: 'settings',
@@ -140,6 +145,14 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         { id: 'music-ms', label: 'Memory Stick™', sublabel: `${nostalgicTracks.length} morceaux`, icon: 'ms', type: 'folder' },
         { id: 'music-sensme', label: 'SensMe™ channels', sublabel: 'Playlists Relax & Énergie', icon: 'sensme', type: 'folder' },
         { id: 'music-now', label: 'Lecture en cours', sublabel: currentTrack ? `${currentTrack.artist} - ${currentTrack.title}` : 'Ouvrir l\'écran lecteur', icon: 'now', type: 'action' },
+      ],
+    },
+    {
+      id: 'game',
+      name: 'Jeu',
+      icon: 'game',
+      items: [
+        { id: 'game-ms', label: 'Memory Stick™ (Jeux)', sublabel: `${gamesList.length} titre UMD`, icon: 'game', type: 'folder' },
       ],
     },
     {
@@ -196,6 +209,8 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     videosList,
     currentVideo,
     isVideoPlaying,
+    gamesList,
+    currentGame,
     isSearchModalOpen,
     currentTrack,
   });
@@ -214,6 +229,8 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       videosList,
       currentVideo,
       isVideoPlaying,
+      gamesList,
+      currentGame,
       isSearchModalOpen,
       currentTrack,
     };
@@ -222,7 +239,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   // Push current frame onto navigation state stack
   const pushState = (
     newView: XMBViewMode,
-    nextSubListType?: 'ms' | 'sensme' | 'history' | 'search_results' | 'video'
+    nextSubListType?: 'ms' | 'sensme' | 'history' | 'search_results' | 'video' | 'game'
   ) => {
     const current = stateRef.current;
     setNavStack((prev) => [
@@ -276,7 +293,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     }
   };
 
-  // Home Button (Reset stack to root XMB, stop any playing video)
+  // Home Button (Reset stack to root XMB, stop any playing video or game)
   const handleHome = () => {
     sound.playBack();
     if (videoRef.current) {
@@ -296,6 +313,12 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   const handleNav = (dir: 'left' | 'right' | 'up' | 'down') => {
     const s = stateRef.current;
     if (s.isSearchModalOpen) return;
+
+    // In Game Screen: directions reserved for gameplay, or options
+    if (s.viewMode === 'game_screen') {
+      sound.playTick();
+      return;
+    }
 
     // In Video Player View: Left/Right seeks -5s/+5s, triggers HUD
     if (s.viewMode === 'video_player') {
@@ -337,6 +360,16 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       setItemIndex(0);
     } else if (dir === 'right') {
       if (s.viewMode === 'sublist') {
+        if (s.subListType === 'game') {
+          const game = s.gamesList[s.subItemIndex];
+          if (game) {
+            sound.playEnter();
+            pauseTrack();
+            setCurrentGame(game);
+            pushState('game_screen', 'game');
+          }
+          return;
+        }
         if (s.subListType === 'video') {
           const video = s.videosList[s.subItemIndex];
           if (video) {
@@ -359,10 +392,11 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       const curItem = s.activeItems[s.itemIndex];
       if (curItem?.type === 'folder') {
         sound.playEnter();
-        let targetType: 'ms' | 'sensme' | 'history' | 'video' = 'ms';
+        let targetType: 'ms' | 'sensme' | 'history' | 'video' | 'game' = 'ms';
         if (curItem.id === 'music-sensme') targetType = 'sensme';
         if (curItem.id === 'history-list') targetType = 'history';
         if (curItem.id === 'video-ms') targetType = 'video';
+        if (curItem.id === 'game-ms') targetType = 'game';
         pushState('sublist', targetType);
         return;
       }
@@ -372,7 +406,12 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     } else if (dir === 'up') {
       sound.playTick();
       if (s.viewMode === 'sublist') {
-        const listLength = s.subListType === 'video' ? s.videosList.length : s.currentSubList.length;
+        const listLength =
+          s.subListType === 'game'
+            ? s.gamesList.length
+            : s.subListType === 'video'
+            ? s.videosList.length
+            : s.currentSubList.length;
         setSubItemIndex((prev) => (prev > 0 ? prev - 1 : Math.max(0, listLength - 1)));
       } else {
         setItemIndex((prev) => (prev > 0 ? prev - 1 : Math.max(0, s.activeItems.length - 1)));
@@ -380,7 +419,12 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     } else if (dir === 'down') {
       sound.playTick();
       if (s.viewMode === 'sublist') {
-        const listLength = s.subListType === 'video' ? s.videosList.length : s.currentSubList.length;
+        const listLength =
+          s.subListType === 'game'
+            ? s.gamesList.length
+            : s.subListType === 'video'
+            ? s.videosList.length
+            : s.currentSubList.length;
         setSubItemIndex((prev) => (prev < listLength - 1 ? prev + 1 : 0));
       } else {
         setItemIndex((prev) => (prev < s.activeItems.length - 1 ? prev + 1 : 0));
@@ -395,7 +439,14 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
     sound.playEnter();
 
-    // 1. In Video Player: Toggle Play/Pause
+    // 1. In Game Screen: Action / trigger feedback
+    if (s.viewMode === 'game_screen') {
+      setInfoPopup('Démarrage du Mini-Jeu Rétro...\nPrêt pour intégration Canvas / iframe externe.');
+      setTimeout(() => setInfoPopup(null), 2500);
+      return;
+    }
+
+    // 2. In Video Player: Toggle Play/Pause
     if (s.viewMode === 'video_player') {
       triggerVideoHUD();
       if (videoRef.current) {
@@ -410,14 +461,23 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       return;
     }
 
-    // 2. In Dedicated Audio Player: Toggle Play/Pause
+    // 3. In Dedicated Audio Player: Toggle Play/Pause
     if (s.viewMode === 'player') {
       togglePlay();
       return;
     }
 
-    // 3. In Sublist: play selected video or audio track
+    // 4. In Sublist: play selected game, video, or audio track
     if (s.viewMode === 'sublist') {
+      if (s.subListType === 'game') {
+        const selectedGame = s.gamesList[s.subItemIndex];
+        if (selectedGame) {
+          pauseTrack();
+          setCurrentGame(selectedGame);
+          pushState('game_screen', 'game');
+        }
+        return;
+      }
       if (s.subListType === 'video') {
         const selectedVideo = s.videosList[s.subItemIndex];
         if (selectedVideo) {
@@ -436,15 +496,16 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       return;
     }
 
-    // 4. In Main XMB Menu
+    // 5. In Main XMB Menu
     const currentItem = s.activeItems[s.itemIndex];
     if (!currentItem) return;
 
     if (currentItem.type === 'folder') {
-      let targetType: 'ms' | 'sensme' | 'history' | 'video' = 'ms';
+      let targetType: 'ms' | 'sensme' | 'history' | 'video' | 'game' = 'ms';
       if (currentItem.id === 'music-sensme') targetType = 'sensme';
       if (currentItem.id === 'history-list') targetType = 'history';
       if (currentItem.id === 'video-ms') targetType = 'video';
+      if (currentItem.id === 'game-ms') targetType = 'game';
       pushState('sublist', targetType);
     } else if (currentItem.type === 'search') {
       setIsSearchModalOpen(true);
@@ -478,7 +539,11 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   const handleOptions = () => {
     const s = stateRef.current;
     sound.playOption();
-    if (s.viewMode === 'video_player' && currentVideo) {
+    if (s.viewMode === 'game_screen' && currentGame) {
+      setInfoPopup(
+        `Jeu UMD : ${currentGame.title}\nÉditeur : ${currentGame.publisher || 'SCE'}\nGenre : ${currentGame.genre || 'Arcade'}\nTaille : ${currentGame.size || '14.2 MB'}\nSystème : Compatible PSP v6.61`
+      );
+    } else if (s.viewMode === 'video_player' && currentVideo) {
       triggerVideoHUD();
       setInfoPopup(
         `Clip Vidéo : ${currentVideo.title}\nFormat : ${currentVideo.codec || 'MPEG-4 AVC / H.264'}\nRésolution : 480 × 272 (16:9)\nSource : Local PSP Storage`
@@ -488,11 +553,18 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         `Morceau : ${currentTrack.title}\nArtiste : ${currentTrack.artist}\nAlbum : ${currentTrack.album}\nFormat : Audio AAC 256kbps 44.1kHz`
       );
     } else if (s.viewMode === 'sublist') {
-      if (s.subListType === 'video') {
+      if (s.subListType === 'game') {
+        const game = s.gamesList[s.subItemIndex];
+        if (game) {
+          setInfoPopup(
+            `Titre : ${game.title}\nÉditeur : ${game.publisher || 'SCE'}\nGenre : ${game.genre || 'Arcade'}\nTaille : ${game.size || '14.2 MB'}`
+          );
+        }
+      } else if (s.subListType === 'video') {
         const video = s.videosList[s.subItemIndex];
         if (video) {
           setInfoPopup(
-            `Titre : ${video.title}\nArtiste : ${video.artist || 'PSP Video'}\nDurée : ${video.duration || 'N/A'}\nCodec : ${video.codec || 'MPEG-4'}`
+            `Titre : ${video.title}\nArtiste : ${video.artist || 'Sélection Personnelle'}\nDurée : ${video.duration || '--:--'}\nCodec : ${video.codec || 'MPEG-4'}`
           );
         }
       } else {
@@ -599,7 +671,12 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       {/* 1. TOP STATUS BAR */}
       <div className="absolute top-2 left-3 right-3 flex justify-between items-center z-30 text-[10px] font-medium tracking-wider text-white/80 drop-shadow">
         <div className="flex items-center gap-1.5 text-white/60 text-[9px] uppercase font-mono">
-          {viewMode === 'video_player' ? (
+          {viewMode === 'game_screen' ? (
+            <span className="text-emerald-400 font-bold flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              UMD™ GAME
+            </span>
+          ) : viewMode === 'video_player' ? (
             <span className="text-cyan-400 font-bold flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
               LECTEUR VIDÉO UMD
@@ -617,7 +694,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         </div>
 
         <div className="flex items-center gap-2.5">
-          {isPlaying && viewMode !== 'player' && viewMode !== 'video_player' && (
+          {isPlaying && viewMode !== 'player' && viewMode !== 'video_player' && viewMode !== 'game_screen' && (
             <div
               onClick={() => pushState('player')}
               className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/15 cursor-pointer hover:bg-white/20 animate-pulse"
@@ -640,8 +717,76 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         </div>
       </div>
 
-      {/* 2. DEDICATED FULLSCREEN VIDEO PLAYER (LECTEUR VIDÉO MP4 PLEIN ÉCRAN) */}
-      {viewMode === 'video_player' && currentVideo ? (
+      {/* 2. DEDICATED FULLSCREEN GAME VIEWPORT (#psp-screen) */}
+      {viewMode === 'game_screen' && currentGame ? (
+        <div
+          id="psp-game-viewport"
+          className="absolute inset-0 bg-[#07090e] z-20 flex flex-col justify-between p-4 overflow-hidden animate-fade-in"
+        >
+          {/* Subtle retro arcade grid & horizon scanlines */}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(16,185,129,0.15),transparent_70%)] pointer-events-none" />
+          <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent_50%,rgba(0,0,0,0.35)_51%)] bg-[length:100%_4px] pointer-events-none opacity-50" />
+
+          {/* Top Game Bar */}
+          <div className="relative z-10 flex items-center justify-between border-b border-emerald-500/20 pb-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              <span className="font-mono text-[9px] font-bold text-emerald-400 tracking-wider">
+                UMD™ GAME INSERTED
+              </span>
+            </div>
+            <span className="font-mono text-[8px] text-white/50">
+              PSP™ Street E1000 • v6.61
+            </span>
+          </div>
+
+          {/* Main Game Showcase */}
+          <div className="relative z-10 flex items-center justify-center gap-6 my-auto">
+            {/* Retro UMD Game Cartridge Visual */}
+            <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-emerald-950/70 via-black to-slate-900 border-2 border-emerald-400/40 shadow-[0_0_30px_rgba(16,185,129,0.25)] flex flex-col items-center justify-center p-2 relative">
+              <div className="w-12 h-12 rounded-full border-2 border-emerald-400/60 flex items-center justify-center bg-emerald-500/10 mb-1">
+                <CategoryIcon type="game" active={true} />
+              </div>
+              <span className="text-[7.5px] font-mono font-bold text-emerald-300 uppercase tracking-wider text-center">
+                UMD™ DISC
+              </span>
+            </div>
+
+            {/* Game Metadata & Ready Badge */}
+            <div className="flex flex-col max-w-[270px]">
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono text-[7.5px] font-bold">
+                  {currentGame.genre || 'ARCADE'}
+                </span>
+                <span className="text-[8px] font-mono text-white/40">
+                  {currentGame.size || '14.2 MB'}
+                </span>
+              </div>
+              <h2 className="text-[15px] font-bold text-white drop-shadow">
+                {currentGame.title}
+              </h2>
+              <p className="text-[10px] text-white/70 font-medium mb-2.5">
+                {currentGame.description || currentGame.sublabel || 'Mini-jeu d\'arcade rétro PSP'}
+              </p>
+              <div className="flex items-center gap-2">
+                <div className="px-2.5 py-1 rounded-md bg-white/10 border border-white/20 text-[9px] text-white/90 font-mono flex items-center gap-1.5 shadow-sm">
+                  <span>🎮</span> Appuyer sur <b className="text-blue-400">✕</b> pour interagir
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Canvas container slot for future interactive game engines / iframes */}
+          <div id="psp-game-canvas" className="hidden" />
+
+          {/* Bottom Prompt Bar */}
+          <div className="relative z-10 flex items-center justify-between text-[8px] font-mono text-white/50 border-t border-white/10 pt-2">
+            <span>PlayStation Portable • Moteur de jeu interactif</span>
+            <span>Appuyer sur ◯ pour quitter le jeu</span>
+          </div>
+        </div>
+      ) : viewMode === 'video_player' && currentVideo ? (
+        /* 3. DEDICATED FULLSCREEN VIDEO PLAYER (LECTEUR VIDÉO MP4 PLEIN ÉCRAN) */
         <div className="absolute inset-0 bg-black z-20 flex items-center justify-center overflow-hidden">
           {/* Native HTML5 16:9 Video with object-cover */}
           <video
@@ -687,7 +832,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
               </span>
             </div>
 
-            {/* Center Play/Pause watermarked indicator when paused */}
+            {/* Center Play/Pause indicator when paused */}
             {!isVideoPlaying && (
               <div className="self-center flex items-center justify-center w-12 h-12 rounded-full bg-black/60 border border-white/20 text-white/80 shadow-2xl backdrop-blur-sm">
                 <svg className="w-5 h-5 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
@@ -704,7 +849,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                   {String(Math.floor(videoProgress.current % 60)).padStart(2, '0')}
                 </span>
                 <span className="text-[8px] text-white/50">
-                  {currentVideo.artist || 'Sony PSP Studio'}
+                  {currentVideo.artist || 'Sélection Personnelle'}
                 </span>
                 <span>
                   {Math.floor(videoProgress.duration / 60)}:
@@ -727,7 +872,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
           </div>
         </div>
       ) : viewMode === 'player' && currentTrack ? (
-        /* 3. DEDICATED AUDIO PLAYER SCREEN (ÉCRAN DE LECTURE DÉDIÉ) */
+        /* 4. DEDICATED AUDIO PLAYER SCREEN (ÉCRAN DE LECTURE DÉDIÉ) */
         <div className="absolute inset-0 pt-7 pb-6 px-5 flex flex-col justify-between z-20 animate-fade-in bg-gradient-to-b from-black/40 via-transparent to-black/60">
           <div className="flex items-center gap-4 flex-1 my-auto">
             {/* Album Artwork Square with Glass Reflection */}
@@ -788,7 +933,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
           </div>
         </div>
       ) : (
-        /* 4. XMB DUAL-AXIS MENU (Catégories Horizontales + Items Verticaux) */
+        /* 5. XMB DUAL-AXIS MENU (Catégories Horizontales + Items Verticaux) */
         <>
           {/* Horizontal Categories Bar */}
           <div
@@ -882,15 +1027,53 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                 })}
               </div>
             ) : (
-              // Sublist View (Memory Stick, SensMe, Search Results, History, Videos)
+              // Sublist View (Memory Stick, SensMe, Search Results, History, Videos, Games)
               <div
                 className="flex flex-col transition-transform duration-250 ease-out"
                 style={{
                   transform: `translateY(calc(30px - ${subItemIndex * 48}px))`,
                 }}
               >
-                {subListType === 'video' ? (
-                  // Video clips list from src/data/videos.json
+                {subListType === 'game' ? (
+                  // Games list from src/data/games.json
+                  gamesList.map((game, idx) => {
+                    const isSelected = idx === subItemIndex;
+                    return (
+                      <div
+                        key={game.id}
+                        onClick={() => {
+                          setSubItemIndex(idx);
+                          pauseTrack();
+                          setCurrentGame(game);
+                          pushState('game_screen', 'game');
+                        }}
+                        className={`h-12 flex items-center px-3 gap-2.5 rounded-lg cursor-pointer transition-all duration-200 ${
+                          isSelected
+                            ? 'bg-gradient-to-r from-white/30 via-white/15 to-transparent border-l-3 border-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.3)]'
+                            : 'opacity-45 hover:opacity-75'
+                        }`}
+                      >
+                        <div className="relative w-12 h-8 rounded overflow-hidden flex-shrink-0 shadow border border-white/20 bg-gradient-to-br from-[#132219] via-[#0d1712] to-black flex items-center justify-center">
+                          <CategoryIcon type="game" active={isSelected} />
+                        </div>
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] font-bold truncate text-white drop-shadow">
+                              {game.title}
+                            </span>
+                            <span className="text-[8px] px-1 rounded bg-emerald-500/80 text-black font-mono font-bold flex-shrink-0">
+                              UMD™
+                            </span>
+                          </div>
+                          <span className="text-[9px] text-white/75 truncate">
+                            {game.publisher || 'SCE'} • {game.genre || 'Arcade'} • {game.size || '14 MB'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : subListType === 'video' ? (
+                  // Video clips list from src/data/videos.json with elegant fallback for empty thumbnail
                   videosList.map((video, idx) => {
                     const isSelected = idx === subItemIndex;
                     return (
@@ -909,29 +1092,51 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                             : 'opacity-45 hover:opacity-75'
                         }`}
                       >
-                        <div className="relative w-12 h-8 rounded overflow-hidden flex-shrink-0 shadow border border-white/20 bg-black">
-                          <img
-                            src={video.thumbnail}
-                            alt={video.title}
-                            className="w-full h-full object-cover"
-                          />
-                          <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-                            <span className="text-[8px] text-white/90">▶</span>
-                          </div>
+                        {/* Miniature avec fallback visuel élégant (icône pellicule UMD sur fond dégradé sombre) */}
+                        <div className="relative w-12 h-8 rounded overflow-hidden flex-shrink-0 shadow border border-white/20 bg-gradient-to-br from-[#1a2333] via-[#0f1522] to-black flex items-center justify-center">
+                          {video.thumbnail ? (
+                            <img
+                              src={video.thumbnail}
+                              alt={video.title}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                (e.currentTarget as HTMLElement).style.display = 'none';
+                              }}
+                            />
+                          ) : (
+                            <div className="flex flex-col items-center justify-center gap-0.5">
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="text-cyan-400">
+                                <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
+                                <line x1="7" y1="2" x2="7" y2="22" />
+                                <line x1="17" y1="2" x2="17" y2="22" />
+                                <line x1="2" y1="12" x2="22" y2="12" />
+                                <line x1="2" y1="7" x2="7" y2="7" />
+                                <line x1="2" y1="17" x2="7" y2="17" />
+                                <line x1="17" y1="17" x2="22" y2="17" />
+                                <line x1="17" y1="7" x2="22" y2="7" />
+                              </svg>
+                              <span className="text-[6.5px] font-mono font-bold text-cyan-300 tracking-wider">MP4</span>
+                            </div>
+                          )}
+                          {video.thumbnail && (
+                            <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                              <span className="text-[8px] text-white/90">▶</span>
+                            </div>
+                          )}
                         </div>
                         <div className="flex flex-col min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
                             <span className="text-[11px] font-bold truncate text-white drop-shadow">
                               {video.title}
                             </span>
-                            {video.duration && (
+                            {video.duration && video.duration !== '--:--' && (
                               <span className="text-[8px] px-1 rounded bg-cyan-500/80 text-white font-mono flex-shrink-0">
                                 {video.duration}
                               </span>
                             )}
                           </div>
                           <span className="text-[9px] text-white/75 truncate">
-                            {video.artist || 'Sony PSP Studio'} • {video.codec || 'MPEG-4'}
+                            {video.artist || 'Sélection Personnelle'} • {video.codec || 'MPEG-4'}
                           </span>
                         </div>
                       </div>
@@ -991,7 +1196,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         </>
       )}
 
-      {/* 5. SEARCH MODAL DIALOG */}
+      {/* 6. SEARCH MODAL DIALOG */}
       {isSearchModalOpen && (
         <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-6">
           <div className="w-full max-w-xs bg-gradient-to-b from-[#252a34] to-[#12161f] border border-white/30 rounded-2xl p-4 shadow-2xl">
@@ -1036,16 +1241,31 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         </div>
       )}
 
-      {/* 6. INFO POPUP NOTIFICATION */}
+      {/* 7. INFO POPUP NOTIFICATION */}
       {infoPopup && (
         <div className="absolute top-12 right-4 max-w-xs bg-black/90 backdrop-blur-md border border-white/25 rounded-xl p-2.5 text-[10px] text-white shadow-2xl z-40 animate-fade-in whitespace-pre-line">
           {infoPopup}
         </div>
       )}
 
-      {/* 7. BOTTOM CONTROLS BAR (Calée au bas de l'écran LCD) */}
+      {/* 8. BOTTOM CONTROLS BAR (Calée au bas de l'écran LCD) */}
       <div className="absolute bottom-1 left-3 right-3 flex items-center justify-between text-[8.5px] text-white/60 font-medium z-30 pointer-events-none">
-        {viewMode === 'video_player' ? (
+        {viewMode === 'game_screen' ? (
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1">
+              <PSGlyph type="cross" size={11} />
+              <span>Démarrer / Action</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <PSGlyph type="circle" size={11} />
+              <span>Quitter le jeu</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <PSGlyph type="triangle" size={11} />
+              <span>Info UMD</span>
+            </span>
+          </div>
+        ) : viewMode === 'video_player' ? (
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1">
               <PSGlyph type="cross" size={11} />
