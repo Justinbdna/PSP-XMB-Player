@@ -6,9 +6,6 @@ import { useAudio } from './AudioEngine';
 import { sound } from '../services/sound';
 import { useGamepad } from '../hooks/useGamepad';
 
-// Mode Debug visuel pour calibrer les hitboxes chirurgicalement
-const DEBUG_HITBOXES = true;
-
 // Chassis Configuration allowing easy switching between models/colors later
 export const PSP_CHASSIS_CONFIG = {
   activeModel: 'psp-street-e1000-black',
@@ -31,6 +28,9 @@ export const PSPConsole: React.FC = () => {
     action: string;
     timestamp: number;
   } | null>(null);
+
+  // Commutateur dynamique pour le mode Debug visuel des Hitboxes
+  const [debugHitboxes, setDebugHitboxes] = useState<boolean>(true);
 
   const { adjustVolume, togglePlay, showVolumeOSD, volume } = useAudio();
   const [powerOn] = useState<boolean>(true);
@@ -104,7 +104,7 @@ export const PSPConsole: React.FC = () => {
     ...pos,
     borderRadius: isCircle ? '50%' : (pos.borderRadius || '4px'),
     aspectRatio: (isCircle || pos.aspectRatio) ? (pos.aspectRatio || '1 / 1') : undefined,
-    ...(DEBUG_HITBOXES
+    ...(debugHitboxes
       ? {
           outline: '2px solid rgba(255, 0, 0, 0.7)',
           backgroundColor: 'rgba(255, 0, 0, 0.2)',
@@ -117,9 +117,24 @@ export const PSPConsole: React.FC = () => {
   });
 
   return (
-    <div className="min-h-screen w-full bg-[#08090c] flex flex-col items-center justify-center p-2 sm:p-6 overflow-hidden font-['Inter',sans-serif]">
+    <div className="relative min-h-screen w-full bg-[#08090c] flex flex-col items-center justify-center p-2 sm:p-6 overflow-hidden font-['Inter',sans-serif]">
       {/* Background ambient lighting */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(40,55,75,0.18),rgba(0,0,0,0.96))] pointer-events-none"></div>
+
+      {/* ========================================================
+          COMMUTATEUR FLOTTANT DEBUG HITBOXES UI (HORS CONSOLE)
+          ======================================================== */}
+      <button
+        onClick={() => setDebugHitboxes((prev) => !prev)}
+        className={`fixed top-4 right-4 z-50 px-3.5 py-1.5 rounded-full text-xs font-mono font-semibold tracking-wide transition-all duration-200 border cursor-pointer backdrop-blur-md shadow-xl select-none ${
+          debugHitboxes
+            ? 'bg-red-500/20 border-red-500/60 text-red-300 hover:bg-red-500/30 shadow-[0_0_18px_rgba(239,68,68,0.35)]'
+            : 'bg-white/10 border-white/20 text-white/60 hover:bg-white/20 hover:text-white'
+        }`}
+        title="Basculer l'affichage des bordures rouges des hitboxes"
+      >
+        🛠️ Debug Hitboxes : {debugHitboxes ? 'ON' : 'OFF'}
+      </button>
 
       {/* ========================================================
           CONTENEUR GLOBAL AU RATIO FIXE DE LA CONSOLE (~2.36:1)
@@ -290,7 +305,7 @@ export const PSPConsole: React.FC = () => {
               sound.playOption();
               sendCommand('triangle');
             }}
-            title="Triangle (Options)"
+            title="Triangle (Options contextuelles)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
             style={getHitboxStyle({ top: '29.5%', left: '89.5%', width: '5.6%' }, true)}
           />
@@ -301,7 +316,7 @@ export const PSPConsole: React.FC = () => {
               sound.playEnter();
               sendCommand('cross');
             }}
-            title="Croix (Valider)"
+            title="Croix (Valider / Lecture)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
             style={getHitboxStyle({ top: '58.5%', left: '89.5%', width: '5.6%' }, true)}
           />
@@ -312,7 +327,7 @@ export const PSPConsole: React.FC = () => {
               sound.playTick();
               sendCommand('square');
             }}
-            title="Carré (Lecteur / Play-Pause)"
+            title="Carré (Bascule Play / Pause immédiate)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
             style={getHitboxStyle({ top: '44.0%', left: '83.5%', width: '5.6%' }, true)}
           />
@@ -323,7 +338,7 @@ export const PSPConsole: React.FC = () => {
               sound.playBack();
               sendCommand('circle');
             }}
-            title="Rond (Retour / Annuler)"
+            title="Rond (Retour arrière)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
             style={getHitboxStyle({ top: '44.0%', left: '95.5%', width: '5.6%' }, true)}
           />
@@ -351,7 +366,7 @@ export const PSPConsole: React.FC = () => {
             style={getHitboxStyle({ top: '92%', left: '31.0%', width: '4.5%', height: '6%', borderRadius: '4px' })}
           />
 
-          {/* Volume + : left 35.5%, top 92%, width 4.5%, height 6% */}
+          {/* Volume + : recalibré chirurgicalement sur (+) à left 38.6%, top 92%, width 4.5%, height 6% */}
           <button
             onClick={() => {
               adjustVolume(0.05);
@@ -359,7 +374,7 @@ export const PSPConsole: React.FC = () => {
             }}
             title="Volume +"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
-            style={getHitboxStyle({ top: '92%', left: '35.5%', width: '4.5%', height: '6%', borderRadius: '4px' })}
+            style={getHitboxStyle({ top: '92%', left: '38.6%', width: '4.5%', height: '6%', borderRadius: '4px' })}
           />
 
           {/* SELECT : left 66.5%, top 92%, width 6%, height 6% */}
@@ -392,16 +407,16 @@ export const PSPConsole: React.FC = () => {
         <span>•</span>
         <span>⌨️ <b className="text-white/80">Flèches</b> : Naviguer</span>
         <span>•</span>
-        <span><b className="text-blue-400">X / Entrée</b> : Valider</span>
+        <span><b className="text-blue-400">X / Entrée</b> : Valider / Lecture</span>
         <span>•</span>
         <span><b className="text-red-400">O / Échap</b> : Retour</span>
         <span>•</span>
-        <span><b className="text-pink-400">S / Espace</b> : Lecteur Plein Écran</span>
+        <span><b className="text-pink-400">▢ / Espace</b> : Play / Pause</span>
         <span>•</span>
-        <span><b className="text-emerald-400">A</b> : Options</span>
+        <span><b className="text-emerald-400">△ / A</b> : Options</span>
         <span>•</span>
         <span><b className="text-white/80">H</b> : PS Home</span>
-        {DEBUG_HITBOXES && (
+        {debugHitboxes && (
           <span className="text-amber-400 font-mono ml-2">⚠️ Mode Debug Hitboxes Actif</span>
         )}
       </div>
