@@ -103,7 +103,7 @@ export const PSPConsole: React.FC = () => {
   const getHitboxStyle = (pos: React.CSSProperties, isCircle = false): React.CSSProperties => ({
     ...pos,
     borderRadius: isCircle ? '50%' : (pos.borderRadius || '4px'),
-    aspectRatio: isCircle ? '1 / 1' : undefined,
+    aspectRatio: (isCircle || pos.aspectRatio) ? (pos.aspectRatio || '1 / 1') : undefined,
     ...(DEBUG_HITBOXES
       ? {
           outline: '2px solid rgba(255, 0, 0, 0.7)',
@@ -168,7 +168,7 @@ export const PSPConsole: React.FC = () => {
               {/* Fond dynamique sinusoïdal PSP en Canvas 2D */}
               <WaveBackground theme={theme} />
 
-              {/* Interface XMB, navigation, lecteur vidéo MP4 et lecteur audio */}
+              {/* Interface XMB, navigation, lecteur vidéo MP4, lecteur audio et jeux */}
               <XMBMenu
                 currentTheme={theme}
                 onThemeChange={setTheme}
@@ -212,11 +212,34 @@ export const PSPConsole: React.FC = () => {
 
         {/* ========================================================
             CALQUE 3 — COMMANDES / HOTSPOTS INVISIBLES
-            (Calibration chirurgicale & Mode Debug avec ratio 1:1)
+            (Recalibrage chirurgical au centre d'ancrage transform -50%, -50%)
             ======================================================== */}
         <div className="absolute inset-0 z-20 pointer-events-none">
-          {/* ----- D-PAD (Directional Cross) ----- */}
-          {/* Haut : (26.5%, 9.3%) */}
+          {/* ----- 1. GÂCHETTES SUPÉRIEURES (L & R TRIGGERS) ----- */}
+          {/* Gâchette L (Gauche) : (8.5%, 3.5%) */}
+          <button
+            onClick={() => {
+              sound.playTick();
+              sendCommand('left');
+            }}
+            title="Gâchette L (Catégorie Gauche)"
+            className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.94] transition-transform duration-75"
+            style={getHitboxStyle({ top: '3.5%', left: '8.5%', width: '14%', height: '7%', borderRadius: '4px' })}
+          />
+
+          {/* Gâchette R (Droite) : (91.5%, 3.5%) */}
+          <button
+            onClick={() => {
+              sound.playTick();
+              sendCommand('right');
+            }}
+            title="Gâchette R (Catégorie Droite)"
+            className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.94] transition-transform duration-75"
+            style={getHitboxStyle({ top: '3.5%', left: '91.5%', width: '14%', height: '7%', borderRadius: '4px' })}
+          />
+
+          {/* ----- 2. D-PAD (CROIX DIRECTIONNELLE GAUCHE) - Centre à (11.2%, 44%) ----- */}
+          {/* Haut : left 11.2%, top 32.5%, width 4.8%, aspect-ratio 1 / 1, border-radius 6px */}
           <button
             onClick={() => {
               sound.playTick();
@@ -224,10 +247,10 @@ export const PSPConsole: React.FC = () => {
             }}
             title="D-Pad Haut"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
-            style={getHitboxStyle({ top: '26.5%', left: '9.3%', width: '4.8%', height: '9.5%', borderRadius: '4px' })}
+            style={getHitboxStyle({ top: '32.5%', left: '11.2%', width: '4.8%', aspectRatio: '1 / 1', borderRadius: '6px' })}
           />
 
-          {/* Bas : (49.5%, 9.3%) */}
+          {/* Bas : left 11.2%, top 55.5%, width 4.8%, aspect-ratio 1 / 1, border-radius 6px */}
           <button
             onClick={() => {
               sound.playTick();
@@ -235,10 +258,10 @@ export const PSPConsole: React.FC = () => {
             }}
             title="D-Pad Bas"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
-            style={getHitboxStyle({ top: '49.5%', left: '9.3%', width: '4.8%', height: '9.5%', borderRadius: '4px' })}
+            style={getHitboxStyle({ top: '55.5%', left: '11.2%', width: '4.8%', aspectRatio: '1 / 1', borderRadius: '6px' })}
           />
 
-          {/* Gauche : (38%, 3.7%) */}
+          {/* Gauche : left 6.2%, top 44.0%, width 4.8%, aspect-ratio 1 / 1, border-radius 6px */}
           <button
             onClick={() => {
               sound.playTick();
@@ -246,10 +269,10 @@ export const PSPConsole: React.FC = () => {
             }}
             title="D-Pad Gauche"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
-            style={getHitboxStyle({ top: '38%', left: '3.7%', width: '5.6%', height: '8.5%', borderRadius: '4px' })}
+            style={getHitboxStyle({ top: '44.0%', left: '6.2%', width: '4.8%', aspectRatio: '1 / 1', borderRadius: '6px' })}
           />
 
-          {/* Droite : (38%, 13.1%) */}
+          {/* Droite : left 16.2%, top 44.0%, width 4.8%, aspect-ratio 1 / 1, border-radius 6px */}
           <button
             onClick={() => {
               sound.playTick();
@@ -257,11 +280,11 @@ export const PSPConsole: React.FC = () => {
             }}
             title="D-Pad Droite"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
-            style={getHitboxStyle({ top: '38%', left: '13.1%', width: '5.6%', height: '8.5%', borderRadius: '4px' })}
+            style={getHitboxStyle({ top: '44.0%', left: '16.2%', width: '4.8%', aspectRatio: '1 / 1', borderRadius: '6px' })}
           />
 
-          {/* ----- ACTION BUTTONS (△ ◯ ✕ □) - Ratio 1:1 circulaire ----- */}
-          {/* Triangle : (23.5%, 87%) */}
+          {/* ----- 3. BOUTONS D'ACTION (CLUSTER DROIT : △, ◯, ✕, ▢) - Centre à (89.5%, 44%) ----- */}
+          {/* Triangle (△ - Haut) : left 89.5%, top 29.5%, width 5.6%, cercle parfait */}
           <button
             onClick={() => {
               sound.playOption();
@@ -269,21 +292,10 @@ export const PSPConsole: React.FC = () => {
             }}
             title="Triangle (Options)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
-            style={getHitboxStyle({ top: '23.5%', left: '87%', width: '5.5%' }, true)}
+            style={getHitboxStyle({ top: '29.5%', left: '89.5%', width: '5.6%' }, true)}
           />
 
-          {/* Rond : (37%, 92.5%) */}
-          <button
-            onClick={() => {
-              sound.playBack();
-              sendCommand('circle');
-            }}
-            title="Rond (Retour / Annuler)"
-            className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
-            style={getHitboxStyle({ top: '37%', left: '92.5%', width: '5.5%' }, true)}
-          />
-
-          {/* Croix : (50.5%, 87%) */}
+          {/* Croix (✕ - Bas) : left 89.5%, top 58.5%, width 5.6%, cercle parfait */}
           <button
             onClick={() => {
               sound.playEnter();
@@ -291,10 +303,10 @@ export const PSPConsole: React.FC = () => {
             }}
             title="Croix (Valider)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
-            style={getHitboxStyle({ top: '50.5%', left: '87%', width: '5.5%' }, true)}
+            style={getHitboxStyle({ top: '58.5%', left: '89.5%', width: '5.6%' }, true)}
           />
 
-          {/* Carré : (37%, 81.5%) */}
+          {/* Carré (▢ - Gauche) : left 83.5%, top 44.0%, width 5.6%, cercle parfait */}
           <button
             onClick={() => {
               sound.playTick();
@@ -302,11 +314,22 @@ export const PSPConsole: React.FC = () => {
             }}
             title="Carré (Lecteur / Play-Pause)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
-            style={getHitboxStyle({ top: '37%', left: '81.5%', width: '5.5%' }, true)}
+            style={getHitboxStyle({ top: '44.0%', left: '83.5%', width: '5.6%' }, true)}
           />
 
-          {/* ----- BARRE INFÉRIEURE : PS/Home, Vol -, Vol +, Select, Start ----- */}
-          {/* Touche PS / Home (Logo PS en bas à gauche : left 25.2%, top 91%) */}
+          {/* Rond (◯ - Droite) : left 95.5%, top 44.0%, width 5.6%, cercle parfait */}
+          <button
+            onClick={() => {
+              sound.playBack();
+              sendCommand('circle');
+            }}
+            title="Rond (Retour / Annuler)"
+            className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
+            style={getHitboxStyle({ top: '44.0%', left: '95.5%', width: '5.6%' }, true)}
+          />
+
+          {/* ----- 4. BARRE INFÉRIEURE : BOUTONS TACTILES PSP STREET (+20% surface cliquable) ----- */}
+          {/* Touche PS / Home : left 25.2%, top 92%, width 5%, height 6% */}
           <button
             onClick={() => {
               sound.playBack();
@@ -314,10 +337,10 @@ export const PSPConsole: React.FC = () => {
             }}
             title="Touche PS / Accueil"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
-            style={getHitboxStyle({ top: '91%', left: '25.2%', width: '4.6%', height: '7.5%', borderRadius: '6px' })}
+            style={getHitboxStyle({ top: '92%', left: '25.2%', width: '5%', height: '6%', borderRadius: '4px' })}
           />
 
-          {/* Volume - */}
+          {/* Volume - : left 31.0%, top 92%, width 4.5%, height 6% */}
           <button
             onClick={() => {
               adjustVolume(-0.05);
@@ -325,10 +348,10 @@ export const PSPConsole: React.FC = () => {
             }}
             title="Volume -"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
-            style={getHitboxStyle({ top: '91%', left: '31.5%', width: '3.6%', height: '7.5%', borderRadius: '6px' })}
+            style={getHitboxStyle({ top: '92%', left: '31.0%', width: '4.5%', height: '6%', borderRadius: '4px' })}
           />
 
-          {/* Volume + */}
+          {/* Volume + : left 35.5%, top 92%, width 4.5%, height 6% */}
           <button
             onClick={() => {
               adjustVolume(0.05);
@@ -336,10 +359,10 @@ export const PSPConsole: React.FC = () => {
             }}
             title="Volume +"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
-            style={getHitboxStyle({ top: '91%', left: '38.5%', width: '3.6%', height: '7.5%', borderRadius: '6px' })}
+            style={getHitboxStyle({ top: '92%', left: '35.5%', width: '4.5%', height: '6%', borderRadius: '4px' })}
           />
 
-          {/* SELECT */}
+          {/* SELECT : left 66.5%, top 92%, width 6%, height 6% */}
           <button
             onClick={() => {
               sound.playTick();
@@ -348,39 +371,17 @@ export const PSPConsole: React.FC = () => {
             }}
             title="SELECT (Changer le thème)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
-            style={getHitboxStyle({ top: '91%', left: '66.2%', width: '6.5%', height: '7.5%', borderRadius: '6px' })}
+            style={getHitboxStyle({ top: '92%', left: '66.5%', width: '6%', height: '6%', borderRadius: '4px' })}
           />
 
-          {/* START */}
+          {/* START : left 74.5%, top 92%, width 6%, height 6% */}
           <button
             onClick={() => {
               togglePlay();
             }}
             title="START (Play / Pause)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
-            style={getHitboxStyle({ top: '91%', left: '74.5%', width: '6.5%', height: '7.5%', borderRadius: '6px' })}
-          />
-
-          {/* Gâchette L (Epaule gauche) */}
-          <button
-            onClick={() => {
-              sound.playTick();
-              sendCommand('left');
-            }}
-            title="Gâchette L (Catégorie Gauche)"
-            className="absolute pointer-events-auto cursor-pointer active:scale-[0.94] transition-transform duration-75"
-            style={getHitboxStyle({ top: '0%', left: '14%', width: '15%', height: '7%', borderRadius: '10px 10px 0 0' })}
-          />
-
-          {/* Gâchette R (Epaule droite) */}
-          <button
-            onClick={() => {
-              sound.playTick();
-              sendCommand('right');
-            }}
-            title="Gâchette R (Catégorie Droite)"
-            className="absolute pointer-events-auto cursor-pointer active:scale-[0.94] transition-transform duration-75"
-            style={getHitboxStyle({ top: '0%', left: '71%', width: '15%', height: '7%', borderRadius: '10px 10px 0 0' })}
+            style={getHitboxStyle({ top: '92%', left: '74.5%', width: '6%', height: '6%', borderRadius: '4px' })}
           />
         </div>
       </div>
