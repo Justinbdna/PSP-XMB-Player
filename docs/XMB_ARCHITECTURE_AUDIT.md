@@ -76,3 +76,4 @@ L'interface de la PSP intègre une identité sonore minimaliste, purement synth�
    - Calque 2 : Viewport LCD 16:9 (`z-10`)
    - Calque 3 : Hotspots invisibles calibrés (`z-20`)
    - Calque 4 : Debug Tooling & Overlays (`z-50`)
+
