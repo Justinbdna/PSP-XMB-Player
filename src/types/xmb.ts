@@ -8,6 +8,16 @@ export interface Track {
   durationMs?: number;
 }
 
+export interface VideoItem {
+  id: string;
+  title: string;
+  artist?: string;
+  thumbnail: string;
+  url: string;
+  duration?: string;
+  codec?: string;
+}
+
 export interface XMBItem {
   id: string;
   label: string;

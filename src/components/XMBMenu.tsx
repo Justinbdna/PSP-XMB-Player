@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { XMBCategory, Track, PSPTheme, PSP_MONTHLY_THEMES } from '../types/xmb';
+import { XMBCategory, Track, VideoItem, PSPTheme, PSP_MONTHLY_THEMES } from '../types/xmb';
 import { CategoryIcon, PSGlyph, SensMeIcon } from './XMBIcons';
 import {
   NOSTALGIC_PSP_TRACKS,
@@ -8,18 +8,19 @@ import {
   getListeningHistory,
   clearListeningHistory,
 } from '../services/itunes';
+import videosData from '../data/videos.json';
 import { sound } from '../services/sound';
 import { useAudio } from './AudioEngine';
 import { AudioVisualizer } from './AudioVisualizer';
 
-export type XMBViewMode = 'menu' | 'sublist' | 'player';
+export type XMBViewMode = 'menu' | 'sublist' | 'player' | 'video_player';
 
 interface NavigationFrame {
   view: XMBViewMode;
   catIndex: number;
   itemIndex: number;
   subItemIndex: number;
-  subListType?: 'ms' | 'sensme' | 'history' | 'search_results';
+  subListType?: 'ms' | 'sensme' | 'history' | 'search_results' | 'video';
 }
 
 interface XMBMenuProps {
@@ -38,7 +39,9 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     isPlaying,
     currentTime,
     duration,
+    volume,
     playTrack,
+    pauseTrack,
     togglePlay,
     seekRelative,
   } = useAudio();
@@ -52,8 +55,20 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   const [itemIndex, setItemIndex] = useState<number>(0); // Default to 'Memory Stick™'
   const [subItemIndex, setSubItemIndex] = useState<number>(0);
   const [subListType, setSubListType] = useState<
-    'ms' | 'sensme' | 'history' | 'search_results'
+    'ms' | 'sensme' | 'history' | 'search_results' | 'video'
   >('ms');
+
+  // Video playback state
+  const [videosList] = useState<VideoItem[]>(videosData as VideoItem[]);
+  const [currentVideo, setCurrentVideo] = useState<VideoItem | null>(null);
+  const [isVideoPlaying, setIsVideoPlaying] = useState<boolean>(false);
+  const [videoProgress, setVideoProgress] = useState<{ current: number; duration: number }>({
+    current: 0,
+    duration: 0,
+  });
+  const [showVideoHUD, setShowVideoHUD] = useState<boolean>(true);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const hudTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Dynamic tracks state
   const [nostalgicTracks] = useState<Track[]>(NOSTALGIC_PSP_TRACKS);
@@ -69,6 +84,22 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   // Real-time clock & battery
   const [timeStr, setTimeStr] = useState<string>('');
   const [dateStr, setDateStr] = useState<string>('');
+
+  // Auto-hide video HUD after 3.5s of inactivity
+  const triggerVideoHUD = () => {
+    setShowVideoHUD(true);
+    if (hudTimerRef.current) clearTimeout(hudTimerRef.current);
+    hudTimerRef.current = setTimeout(() => {
+      setShowVideoHUD(false);
+    }, 3500);
+  };
+
+  // Synchronize master volume with video element
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.volume = volume;
+    }
+  }, [volume]);
 
   // Refresh listening history on view change
   useEffect(() => {
@@ -89,7 +120,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     return () => clearInterval(interval);
   }, []);
 
-  // Strict 4-Category XMB Hierarchy (Paramètres, Musique, Recherche, Historique)
+  // Strict 5-Category XMB Hierarchy (Paramètres, Musique, Vidéo, Recherche, Historique)
   const categories: XMBCategory[] = [
     {
       id: 'settings',
@@ -109,6 +140,14 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         { id: 'music-ms', label: 'Memory Stick™', sublabel: `${nostalgicTracks.length} morceaux`, icon: 'ms', type: 'folder' },
         { id: 'music-sensme', label: 'SensMe™ channels', sublabel: 'Playlists Relax & Énergie', icon: 'sensme', type: 'folder' },
         { id: 'music-now', label: 'Lecture en cours', sublabel: currentTrack ? `${currentTrack.artist} - ${currentTrack.title}` : 'Ouvrir l\'écran lecteur', icon: 'now', type: 'action' },
+      ],
+    },
+    {
+      id: 'video',
+      name: 'Vidéo',
+      icon: 'video',
+      items: [
+        { id: 'video-ms', label: 'Memory Stick™ (Vidéos)', sublabel: `${videosList.length} clips MP4`, icon: 'video', type: 'folder' },
       ],
     },
     {
@@ -134,7 +173,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   const activeCategory = categories[catIndex] || categories[1];
   const activeItems = activeCategory.items;
 
-  // Active sub-list tracks
+  // Active sub-list audio tracks
   const currentSubList: Track[] = (() => {
     if (subListType === 'ms') return nostalgicTracks;
     if (subListType === 'sensme') return [...SENSME_PLAYLISTS.relax, ...SENSME_PLAYLISTS.energetic];
@@ -154,6 +193,9 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     categories,
     activeItems,
     currentSubList,
+    videosList,
+    currentVideo,
+    isVideoPlaying,
     isSearchModalOpen,
     currentTrack,
   });
@@ -169,13 +211,19 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       categories,
       activeItems,
       currentSubList,
+      videosList,
+      currentVideo,
+      isVideoPlaying,
       isSearchModalOpen,
       currentTrack,
     };
   });
 
   // Push current frame onto navigation state stack
-  const pushState = (newView: XMBViewMode, nextSubListType?: 'ms' | 'sensme' | 'history' | 'search_results') => {
+  const pushState = (
+    newView: XMBViewMode,
+    nextSubListType?: 'ms' | 'sensme' | 'history' | 'search_results' | 'video'
+  ) => {
     const current = stateRef.current;
     setNavStack((prev) => [
       ...prev,
@@ -206,6 +254,14 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       return;
     }
 
+    // Stop video playback when quitting video player
+    if (current.viewMode === 'video_player') {
+      if (videoRef.current) {
+        videoRef.current.pause();
+      }
+      setIsVideoPlaying(false);
+    }
+
     if (current.navStack.length > 0) {
       const last = current.navStack[current.navStack.length - 1];
       setNavStack((prev) => prev.slice(0, -1));
@@ -220,9 +276,14 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     }
   };
 
-  // Home Button (Reset stack to root XMB)
+  // Home Button (Reset stack to root XMB, stop any playing video)
   const handleHome = () => {
     sound.playBack();
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
+    }
+    setIsVideoPlaying(false);
     setNavStack([]);
     setViewMode('menu');
     setItemIndex(0);
@@ -236,7 +297,25 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     const s = stateRef.current;
     if (s.isSearchModalOpen) return;
 
-    // In Dedicated Player View: Left/Right seeks -5s/+5s
+    // In Video Player View: Left/Right seeks -5s/+5s, triggers HUD
+    if (s.viewMode === 'video_player') {
+      triggerVideoHUD();
+      if (videoRef.current) {
+        if (dir === 'left') {
+          sound.playTick();
+          videoRef.current.currentTime = Math.max(0, videoRef.current.currentTime - 5);
+        } else if (dir === 'right') {
+          sound.playTick();
+          videoRef.current.currentTime = Math.min(
+            videoRef.current.duration || 9999,
+            videoRef.current.currentTime + 5
+          );
+        }
+      }
+      return;
+    }
+
+    // In Dedicated Audio Player View: Left/Right seeks -5s/+5s
     if (s.viewMode === 'player') {
       if (dir === 'left') {
         sound.playTick();
@@ -258,6 +337,17 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       setItemIndex(0);
     } else if (dir === 'right') {
       if (s.viewMode === 'sublist') {
+        if (s.subListType === 'video') {
+          const video = s.videosList[s.subItemIndex];
+          if (video) {
+            sound.playEnter();
+            pauseTrack();
+            setCurrentVideo(video);
+            setIsVideoPlaying(true);
+            pushState('video_player', 'video');
+          }
+          return;
+        }
         const track = s.currentSubList[s.subItemIndex];
         if (track) {
           sound.playEnter();
@@ -269,9 +359,10 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       const curItem = s.activeItems[s.itemIndex];
       if (curItem?.type === 'folder') {
         sound.playEnter();
-        let targetType: 'ms' | 'sensme' | 'history' = 'ms';
+        let targetType: 'ms' | 'sensme' | 'history' | 'video' = 'ms';
         if (curItem.id === 'music-sensme') targetType = 'sensme';
         if (curItem.id === 'history-list') targetType = 'history';
+        if (curItem.id === 'video-ms') targetType = 'video';
         pushState('sublist', targetType);
         return;
       }
@@ -281,24 +372,18 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     } else if (dir === 'up') {
       sound.playTick();
       if (s.viewMode === 'sublist') {
-        setSubItemIndex((prev) =>
-          prev > 0 ? prev - 1 : Math.max(0, s.currentSubList.length - 1)
-        );
+        const listLength = s.subListType === 'video' ? s.videosList.length : s.currentSubList.length;
+        setSubItemIndex((prev) => (prev > 0 ? prev - 1 : Math.max(0, listLength - 1)));
       } else {
-        setItemIndex((prev) =>
-          prev > 0 ? prev - 1 : Math.max(0, s.activeItems.length - 1)
-        );
+        setItemIndex((prev) => (prev > 0 ? prev - 1 : Math.max(0, s.activeItems.length - 1)));
       }
     } else if (dir === 'down') {
       sound.playTick();
       if (s.viewMode === 'sublist') {
-        setSubItemIndex((prev) =>
-          prev < s.currentSubList.length - 1 ? prev + 1 : 0
-        );
+        const listLength = s.subListType === 'video' ? s.videosList.length : s.currentSubList.length;
+        setSubItemIndex((prev) => (prev < listLength - 1 ? prev + 1 : 0));
       } else {
-        setItemIndex((prev) =>
-          prev < s.activeItems.length - 1 ? prev + 1 : 0
-        );
+        setItemIndex((prev) => (prev < s.activeItems.length - 1 ? prev + 1 : 0));
       }
     }
   };
@@ -310,14 +395,39 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
     sound.playEnter();
 
-    // 1. In Dedicated Player: Toggle Play/Pause
+    // 1. In Video Player: Toggle Play/Pause
+    if (s.viewMode === 'video_player') {
+      triggerVideoHUD();
+      if (videoRef.current) {
+        if (videoRef.current.paused) {
+          videoRef.current.play().catch(console.warn);
+          setIsVideoPlaying(true);
+        } else {
+          videoRef.current.pause();
+          setIsVideoPlaying(false);
+        }
+      }
+      return;
+    }
+
+    // 2. In Dedicated Audio Player: Toggle Play/Pause
     if (s.viewMode === 'player') {
       togglePlay();
       return;
     }
 
-    // 2. In Sublist: play selected track and open player screen
+    // 3. In Sublist: play selected video or audio track
     if (s.viewMode === 'sublist') {
+      if (s.subListType === 'video') {
+        const selectedVideo = s.videosList[s.subItemIndex];
+        if (selectedVideo) {
+          pauseTrack();
+          setCurrentVideo(selectedVideo);
+          setIsVideoPlaying(true);
+          pushState('video_player', 'video');
+        }
+        return;
+      }
       const selectedTrack = s.currentSubList[s.subItemIndex];
       if (selectedTrack) {
         playTrack(selectedTrack);
@@ -326,14 +436,15 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       return;
     }
 
-    // 3. In Main XMB Menu
+    // 4. In Main XMB Menu
     const currentItem = s.activeItems[s.itemIndex];
     if (!currentItem) return;
 
     if (currentItem.type === 'folder') {
-      let targetType: 'ms' | 'sensme' | 'history' = 'ms';
+      let targetType: 'ms' | 'sensme' | 'history' | 'video' = 'ms';
       if (currentItem.id === 'music-sensme') targetType = 'sensme';
       if (currentItem.id === 'history-list') targetType = 'history';
+      if (currentItem.id === 'video-ms') targetType = 'video';
       pushState('sublist', targetType);
     } else if (currentItem.type === 'search') {
       setIsSearchModalOpen(true);
@@ -367,12 +478,28 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   const handleOptions = () => {
     const s = stateRef.current;
     sound.playOption();
-    if (s.viewMode === 'player' && currentTrack) {
-      setInfoPopup(`Morceau : ${currentTrack.title}\nArtiste : ${currentTrack.artist}\nAlbum : ${currentTrack.album}\nFormat : Audio AAC 256kbps 44.1kHz`);
+    if (s.viewMode === 'video_player' && currentVideo) {
+      triggerVideoHUD();
+      setInfoPopup(
+        `Clip Vidéo : ${currentVideo.title}\nFormat : ${currentVideo.codec || 'MPEG-4 AVC / H.264'}\nRésolution : 480 × 272 (16:9)\nSource : Local PSP Storage`
+      );
+    } else if (s.viewMode === 'player' && currentTrack) {
+      setInfoPopup(
+        `Morceau : ${currentTrack.title}\nArtiste : ${currentTrack.artist}\nAlbum : ${currentTrack.album}\nFormat : Audio AAC 256kbps 44.1kHz`
+      );
     } else if (s.viewMode === 'sublist') {
-      const track = s.currentSubList[s.subItemIndex];
-      if (track) {
-        setInfoPopup(`Titre : ${track.title}\nArtiste : ${track.artist}\nAlbum : ${track.album}`);
+      if (s.subListType === 'video') {
+        const video = s.videosList[s.subItemIndex];
+        if (video) {
+          setInfoPopup(
+            `Titre : ${video.title}\nArtiste : ${video.artist || 'PSP Video'}\nDurée : ${video.duration || 'N/A'}\nCodec : ${video.codec || 'MPEG-4'}`
+          );
+        }
+      } else {
+        const track = s.currentSubList[s.subItemIndex];
+        if (track) {
+          setInfoPopup(`Titre : ${track.title}\nArtiste : ${track.artist}\nAlbum : ${track.album}`);
+        }
       }
     } else {
       setInfoPopup(`Système : Sony PSP Street (E1000)\nVersion : 6.61\nCatégorie : ${activeCategory.name}`);
@@ -384,7 +511,9 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   const handleSquare = () => {
     const s = stateRef.current;
     sound.playTick();
-    if (s.viewMode === 'player') {
+    if (s.viewMode === 'video_player') {
+      handleValidate();
+    } else if (s.viewMode === 'player') {
       togglePlay();
     } else if (currentTrack) {
       pushState('player');
@@ -470,7 +599,12 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       {/* 1. TOP STATUS BAR */}
       <div className="absolute top-2 left-3 right-3 flex justify-between items-center z-30 text-[10px] font-medium tracking-wider text-white/80 drop-shadow">
         <div className="flex items-center gap-1.5 text-white/60 text-[9px] uppercase font-mono">
-          {viewMode === 'player' ? (
+          {viewMode === 'video_player' ? (
+            <span className="text-cyan-400 font-bold flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
+              LECTEUR VIDÉO UMD
+            </span>
+          ) : viewMode === 'player' ? (
             <span className="text-emerald-400 font-bold flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
               LECTEUR AUDIO
@@ -483,7 +617,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         </div>
 
         <div className="flex items-center gap-2.5">
-          {isPlaying && viewMode !== 'player' && (
+          {isPlaying && viewMode !== 'player' && viewMode !== 'video_player' && (
             <div
               onClick={() => pushState('player')}
               className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/15 cursor-pointer hover:bg-white/20 animate-pulse"
@@ -506,8 +640,94 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         </div>
       </div>
 
-      {/* 2. DEDICATED PLAYER SCREEN (ÉCRAN DE LECTURE DÉDIÉ) */}
-      {viewMode === 'player' && currentTrack ? (
+      {/* 2. DEDICATED FULLSCREEN VIDEO PLAYER (LECTEUR VIDÉO MP4 PLEIN ÉCRAN) */}
+      {viewMode === 'video_player' && currentVideo ? (
+        <div className="absolute inset-0 bg-black z-20 flex items-center justify-center overflow-hidden">
+          {/* Native HTML5 16:9 Video with object-cover */}
+          <video
+            ref={videoRef}
+            src={currentVideo.url}
+            autoPlay
+            playsInline
+            className="w-full h-full object-cover bg-black"
+            onTimeUpdate={() => {
+              if (videoRef.current) {
+                setVideoProgress({
+                  current: videoRef.current.currentTime,
+                  duration: videoRef.current.duration || 0,
+                });
+              }
+            }}
+            onPlay={() => setIsVideoPlaying(true)}
+            onPause={() => setIsVideoPlaying(false)}
+            onEnded={() => {
+              setIsVideoPlaying(false);
+              triggerVideoHUD();
+            }}
+          />
+
+          {/* Authentic PSP Video Player HUD Overlay */}
+          <div
+            className={`absolute inset-0 flex flex-col justify-between p-3 pointer-events-none transition-opacity duration-300 ${
+              showVideoHUD || !isVideoPlaying ? 'opacity-100' : 'opacity-0'
+            }`}
+          >
+            {/* Top Video Header */}
+            <div className="flex justify-between items-center bg-gradient-to-b from-black/80 via-black/40 to-transparent p-2 rounded-t-lg -mx-3 -mt-3">
+              <div className="flex items-center gap-2">
+                <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono text-[8px] font-bold">
+                  {isVideoPlaying ? 'LECTURE' : 'PAUSE'}
+                </span>
+                <span className="text-[11px] font-bold text-white drop-shadow truncate max-w-[280px]">
+                  {currentVideo.title}
+                </span>
+              </div>
+              <span className="text-[8px] font-mono text-white/50">
+                {currentVideo.codec || 'MPEG-4 AVC'}
+              </span>
+            </div>
+
+            {/* Center Play/Pause watermarked indicator when paused */}
+            {!isVideoPlaying && (
+              <div className="self-center flex items-center justify-center w-12 h-12 rounded-full bg-black/60 border border-white/20 text-white/80 shadow-2xl backdrop-blur-sm">
+                <svg className="w-5 h-5 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              </div>
+            )}
+
+            {/* Bottom Progress & Video Controls Bar */}
+            <div className="bg-gradient-to-t from-black/85 via-black/50 to-transparent p-2 rounded-b-lg -mx-3 -mb-3 flex flex-col gap-1">
+              <div className="flex justify-between items-center text-[9px] font-mono text-white/80">
+                <span>
+                  {Math.floor(videoProgress.current / 60)}:
+                  {String(Math.floor(videoProgress.current % 60)).padStart(2, '0')}
+                </span>
+                <span className="text-[8px] text-white/50">
+                  {currentVideo.artist || 'Sony PSP Studio'}
+                </span>
+                <span>
+                  {Math.floor(videoProgress.duration / 60)}:
+                  {String(Math.floor(videoProgress.duration % 60)).padStart(2, '0')}
+                </span>
+              </div>
+              <div className="w-full bg-white/20 h-1.5 rounded-full overflow-hidden shadow-inner">
+                <div
+                  className="bg-gradient-to-r from-cyan-400 to-blue-500 h-full rounded-full transition-all duration-150"
+                  style={{
+                    width: `${
+                      videoProgress.duration > 0
+                        ? Math.min(100, (videoProgress.current / videoProgress.duration) * 100)
+                        : 0
+                    }%`,
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : viewMode === 'player' && currentTrack ? (
+        /* 3. DEDICATED AUDIO PLAYER SCREEN (ÉCRAN DE LECTURE DÉDIÉ) */
         <div className="absolute inset-0 pt-7 pb-6 px-5 flex flex-col justify-between z-20 animate-fade-in bg-gradient-to-b from-black/40 via-transparent to-black/60">
           <div className="flex items-center gap-4 flex-1 my-auto">
             {/* Album Artwork Square with Glass Reflection */}
@@ -568,7 +788,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
           </div>
         </div>
       ) : (
-        /* 3. XMB DUAL-AXIS MENU (Catégories Horizontales + Items Verticaux) */
+        /* 4. XMB DUAL-AXIS MENU (Catégories Horizontales + Items Verticaux) */
         <>
           {/* Horizontal Categories Bar */}
           <div
@@ -662,14 +882,62 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                 })}
               </div>
             ) : (
-              // Sublist View (Memory Stick, SensMe, Search Results, History)
+              // Sublist View (Memory Stick, SensMe, Search Results, History, Videos)
               <div
                 className="flex flex-col transition-transform duration-250 ease-out"
                 style={{
                   transform: `translateY(calc(30px - ${subItemIndex * 48}px))`,
                 }}
               >
-                {currentSubList.length === 0 ? (
+                {subListType === 'video' ? (
+                  // Video clips list from src/data/videos.json
+                  videosList.map((video, idx) => {
+                    const isSelected = idx === subItemIndex;
+                    return (
+                      <div
+                        key={video.id}
+                        onClick={() => {
+                          setSubItemIndex(idx);
+                          pauseTrack();
+                          setCurrentVideo(video);
+                          setIsVideoPlaying(true);
+                          pushState('video_player', 'video');
+                        }}
+                        className={`h-12 flex items-center px-3 gap-2.5 rounded-lg cursor-pointer transition-all duration-200 ${
+                          isSelected
+                            ? 'bg-gradient-to-r from-white/30 via-white/15 to-transparent border-l-3 border-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.3)]'
+                            : 'opacity-45 hover:opacity-75'
+                        }`}
+                      >
+                        <div className="relative w-12 h-8 rounded overflow-hidden flex-shrink-0 shadow border border-white/20 bg-black">
+                          <img
+                            src={video.thumbnail}
+                            alt={video.title}
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                            <span className="text-[8px] text-white/90">▶</span>
+                          </div>
+                        </div>
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] font-bold truncate text-white drop-shadow">
+                              {video.title}
+                            </span>
+                            {video.duration && (
+                              <span className="text-[8px] px-1 rounded bg-cyan-500/80 text-white font-mono flex-shrink-0">
+                                {video.duration}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[9px] text-white/75 truncate">
+                            {video.artist || 'Sony PSP Studio'} • {video.codec || 'MPEG-4'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : currentSubList.length === 0 ? (
                   <div className="text-white/60 text-xs italic px-3 py-6">
                     {subListType === 'history'
                       ? 'Aucun titre dans l\'historique d\'écoute.'
@@ -723,7 +991,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         </>
       )}
 
-      {/* 4. SEARCH MODAL DIALOG */}
+      {/* 5. SEARCH MODAL DIALOG */}
       {isSearchModalOpen && (
         <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-6">
           <div className="w-full max-w-xs bg-gradient-to-b from-[#252a34] to-[#12161f] border border-white/30 rounded-2xl p-4 shadow-2xl">
@@ -768,16 +1036,32 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         </div>
       )}
 
-      {/* 5. INFO POPUP NOTIFICATION */}
+      {/* 6. INFO POPUP NOTIFICATION */}
       {infoPopup && (
         <div className="absolute top-12 right-4 max-w-xs bg-black/90 backdrop-blur-md border border-white/25 rounded-xl p-2.5 text-[10px] text-white shadow-2xl z-40 animate-fade-in whitespace-pre-line">
           {infoPopup}
         </div>
       )}
 
-      {/* 6. BOTTOM CONTROLS BAR (Calée au bas de l'écran LCD) */}
+      {/* 7. BOTTOM CONTROLS BAR (Calée au bas de l'écran LCD) */}
       <div className="absolute bottom-1 left-3 right-3 flex items-center justify-between text-[8.5px] text-white/60 font-medium z-30 pointer-events-none">
-        {viewMode === 'player' ? (
+        {viewMode === 'video_player' ? (
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1">
+              <PSGlyph type="cross" size={11} />
+              <span>{isVideoPlaying ? 'Pause' : 'Play'}</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <PSGlyph type="circle" size={11} />
+              <span>Quitter la vidéo</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <PSGlyph type="triangle" size={11} />
+              <span>Info UMD</span>
+            </span>
+            <span className="text-white/40">◀/▶ Reculer/Avancer (5s)</span>
+          </div>
+        ) : viewMode === 'player' ? (
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1">
               <PSGlyph type="cross" size={11} />

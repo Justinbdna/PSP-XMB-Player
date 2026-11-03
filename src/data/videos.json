@@ -1,0 +1,29 @@
+[
+  {
+    "id": "vid-1",
+    "title": "PSP™ Cinema Trailer (UMD Video)",
+    "artist": "Sony Computer Entertainment",
+    "thumbnail": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=500&auto=format&fit=crop&q=80",
+    "url": "/videos/trailer_psp.mp4",
+    "duration": "0:10",
+    "codec": "MPEG-4 AVC / H.264 (480x272)"
+  },
+  {
+    "id": "vid-2",
+    "title": "Retro Clip — Friday Night Beats",
+    "artist": "PlayStation Portable Studio",
+    "thumbnail": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=500&auto=format&fit=crop&q=80",
+    "url": "/videos/retro_clip.mp4",
+    "duration": "0:06",
+    "codec": "MPEG-4 AVC / H.264 (480x272)"
+  },
+  {
+    "id": "vid-3",
+    "title": "Nature Botanica (Demo Vidéo HD)",
+    "artist": "Sony Visual Works",
+    "thumbnail": "https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?w=500&auto=format&fit=crop&q=80",
+    "url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+    "duration": "0:10",
+    "codec": "MPEG-4 AVC / H.264"
+  }
+]
