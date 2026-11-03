@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { XMBCategory, Track, VideoItem, GameItem, PSPTheme, PSP_OFFICIAL_THEMES } from '../types/xmb';
 import { CategoryIcon, PSGlyph } from './XMBIcons';
 import {
@@ -30,6 +30,13 @@ interface XMBMenuProps {
   externalCommand?: { action: string; timestamp: number } | null;
   debugHitboxes?: boolean;
 }
+
+const formatTime = (seconds: number): string => {
+  if (isNaN(seconds) || seconds < 0) return '0:00';
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
 
 export const XMBMenu: React.FC<XMBMenuProps> = ({
   currentTheme,
@@ -98,14 +105,35 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   const [timeStr, setTimeStr] = useState<string>('');
   const [dateStr, setDateStr] = useState<string>('');
 
-  // Auto-hide video HUD after 3.5s of inactivity
-  const triggerVideoHUD = () => {
+  // Auto-hide video HUD after 3s of inactivity (Chantier 3)
+  const triggerVideoHUD = useCallback(() => {
     setShowVideoHUD(true);
-    if (hudTimerRef.current) clearTimeout(hudTimerRef.current);
-    hudTimerRef.current = setTimeout(() => {
-      setShowVideoHUD(false);
-    }, 3500);
-  };
+    if (hudTimerRef.current) {
+      clearTimeout(hudTimerRef.current);
+      hudTimerRef.current = null;
+    }
+    const isPlaying = videoRef.current ? !videoRef.current.paused : isVideoPlaying;
+    if (isPlaying) {
+      hudTimerRef.current = setTimeout(() => {
+        setShowVideoHUD(false);
+      }, 3000);
+    }
+  }, [isVideoPlaying]);
+
+  // Clean timer on unmount
+  useEffect(() => {
+    return () => {
+      if (hudTimerRef.current) clearTimeout(hudTimerRef.current);
+    };
+  }, []);
+
+  // Reset HUD visibility when switching out of video player
+  useEffect(() => {
+    if (viewMode !== 'video_player') {
+      if (hudTimerRef.current) clearTimeout(hudTimerRef.current);
+      setShowVideoHUD(true);
+    }
+  }, [viewMode]);
 
   // Synchronize master volume with video element
   useEffect(() => {
@@ -544,6 +572,9 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   // Touche Triangle (△ / Touche A) : Ouvrir / fermer le volet latéral d'options contextuelles
   const handleOptions = () => {
     sound.playOption();
+    if (stateRef.current.viewMode === 'video_player') {
+      triggerVideoHUD();
+    }
     setIsOptionsOpen((prev) => !prev);
   };
 
@@ -552,6 +583,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     sound.playTick();
     const s = stateRef.current;
     if (s.viewMode === 'video_player') {
+      triggerVideoHUD();
       if (videoRef.current) {
         if (videoRef.current.paused) {
           videoRef.current.play().catch(console.warn);
@@ -645,54 +677,51 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
   return (
     <div className="relative w-full h-full select-none overflow-hidden text-white font-['Inter',sans-serif]">
-      {/* 1. TOP STATUS BAR */}
-      <div className="absolute top-2 left-3 right-3 flex justify-between items-center z-30 text-[10px] font-medium tracking-wider text-white/80 drop-shadow">
-        <div className="flex items-center gap-1.5 text-white/60 text-[9px] uppercase font-mono">
-          {viewMode === 'game_screen' ? (
-            <span className="text-emerald-400 font-bold flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              UMD™ ARCADE GAME
-            </span>
-          ) : viewMode === 'video_player' ? (
-            <span className="text-cyan-400 font-bold flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
-              LECTEUR VIDÉO UMD
-            </span>
-          ) : viewMode === 'player' ? (
-            <span className="text-emerald-400 font-bold flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              LECTEUR AUDIO
-            </span>
-          ) : viewMode === 'sublist' ? (
-            <span>PSP™ / {activeCategory.name}</span>
-          ) : (
-            <span>PSP™ XMB</span>
-          )}
-        </div>
+      {/* 1. TOP STATUS BAR (Masquée en mode vidéo pour supprimer tout conflit d'affichage) */}
+      {viewMode !== 'video_player' && (
+        <div className="absolute top-2 left-3 right-3 flex justify-between items-center z-30 text-[10px] font-medium tracking-wider text-white/80 drop-shadow">
+          <div className="flex items-center gap-1.5 text-white/60 text-[9px] uppercase font-mono">
+            {viewMode === 'game_screen' ? (
+              <span className="text-emerald-400 font-bold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                UMD™ ARCADE GAME
+              </span>
+            ) : viewMode === 'player' ? (
+              <span className="text-emerald-400 font-bold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                LECTEUR AUDIO
+              </span>
+            ) : viewMode === 'sublist' ? (
+              <span>PSP™ / {activeCategory.name}</span>
+            ) : (
+              <span>PSP™ XMB</span>
+            )}
+          </div>
 
-        <div className="flex items-center gap-2.5">
-          {isPlaying && viewMode !== 'player' && (
-            <div
-              onClick={() => pushState('player')}
-              className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/15 cursor-pointer hover:bg-white/20 animate-pulse"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-              <span className="text-[9px] text-emerald-300 font-mono">PLAY</span>
-            </div>
-          )}
-          <span className="font-mono text-white/90">{dateStr}</span>
-          <span className="font-mono font-bold text-white">{timeStr}</span>
+          <div className="flex items-center gap-2.5">
+            {isPlaying && viewMode !== 'player' && (
+              <div
+                onClick={() => pushState('player')}
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/15 cursor-pointer hover:bg-white/20 animate-pulse"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                <span className="text-[9px] text-emerald-300 font-mono">PLAY</span>
+              </div>
+            )}
+            <span className="font-mono text-white/90">{dateStr}</span>
+            <span className="font-mono font-bold text-white">{timeStr}</span>
 
-          {/* 3-Segment PSP Battery Indicator */}
-          <div className="flex items-center gap-1 bg-white/10 px-1 py-0.5 rounded border border-white/20">
-            <div className="w-3.5 h-1.5 border border-white/90 rounded-[1px] p-[1px] flex gap-[1px]">
-              <div className="bg-white/95 w-1 h-full rounded-[0.5px]"></div>
-              <div className="bg-white/95 w-1 h-full rounded-[0.5px]"></div>
-              <div className="bg-white/95 w-1 h-full rounded-[0.5px]"></div>
+            {/* 3-Segment PSP Battery Indicator */}
+            <div className="flex items-center gap-1 bg-white/10 px-1 py-0.5 rounded border border-white/20">
+              <div className="w-3.5 h-1.5 border border-white/90 rounded-[1px] p-[1px] flex gap-[1px]">
+                <div className="bg-white/95 w-1 h-full rounded-[0.5px]"></div>
+                <div className="bg-white/95 w-1 h-full rounded-[0.5px]"></div>
+                <div className="bg-white/95 w-1 h-full rounded-[0.5px]"></div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* 2. DEDICATED FULLSCREEN GAME ENGINE (RETRO BRICK BREAKER) */}
       {viewMode === 'game_screen' ? (
@@ -701,7 +730,22 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         </div>
       ) : viewMode === 'video_player' && currentVideo ? (
         /* 3. DEDICATED FULLSCREEN VIDEO PLAYER (LECTEUR VIDÉO MP4 PLEIN ÉCRAN) */
-        <div className="absolute inset-0 bg-black z-20 flex items-center justify-center overflow-hidden">
+        <div
+          className="absolute inset-0 bg-black z-20 flex items-center justify-center overflow-hidden cursor-pointer"
+          onClick={() => {
+            triggerVideoHUD();
+            if (videoRef.current) {
+              if (videoRef.current.paused) {
+                videoRef.current.play().catch(console.warn);
+                setIsVideoPlaying(true);
+              } else {
+                videoRef.current.pause();
+                setIsVideoPlaying(false);
+              }
+            }
+          }}
+          onMouseMove={triggerVideoHUD}
+        >
           {/* Native HTML5 16:9 Video with object-cover */}
           <video
             ref={videoRef}
@@ -717,62 +761,90 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                 });
               }
             }}
-            onPlay={() => setIsVideoPlaying(true)}
-            onPause={() => setIsVideoPlaying(false)}
+            onPlay={() => {
+              setIsVideoPlaying(true);
+              triggerVideoHUD();
+            }}
+            onPause={() => {
+              setIsVideoPlaying(false);
+              setShowVideoHUD(true);
+              if (hudTimerRef.current) {
+                clearTimeout(hudTimerRef.current);
+                hudTimerRef.current = null;
+              }
+            }}
             onEnded={() => {
               setIsVideoPlaying(false);
-              triggerVideoHUD();
+              setShowVideoHUD(true);
+              if (hudTimerRef.current) {
+                clearTimeout(hudTimerRef.current);
+                hudTimerRef.current = null;
+              }
             }}
           />
 
-          {/* Authentic PSP Video Player HUD Overlay */}
+          {/* Barre Supérieure (Top HUD) */}
           <div
-            className={`absolute inset-0 flex flex-col justify-between p-3 pointer-events-none transition-opacity duration-300 ${
+            className={`absolute top-0 left-0 right-0 p-3 flex justify-between items-center pointer-events-none bg-gradient-to-b from-black/80 to-transparent z-30 transition-opacity duration-300 ${
               showVideoHUD || !isVideoPlaying ? 'opacity-100' : 'opacity-0'
             }`}
           >
-            {/* Top Video Header */}
-            <div className="flex justify-between items-center bg-gradient-to-b from-black/80 via-black/40 to-transparent p-2 rounded-t-lg -mx-3 -mt-3">
-              <div className="flex items-center gap-2">
-                <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono text-[8px] font-bold">
-                  {isVideoPlaying ? 'LECTURE' : 'PAUSE'}
-                </span>
-                <span className="text-[11px] font-bold text-white drop-shadow truncate max-w-[280px]">
-                  {currentVideo.title}
-                </span>
-              </div>
-              <span className="text-[8px] font-mono text-white/50">
-                {currentVideo.codec || 'MPEG-4 AVC'}
+            {/* Côté Gauche (Flexbox en ligne) */}
+            <div className="flex items-center gap-3 min-w-0 pr-4">
+              <span
+                className={`px-1.5 py-0.5 rounded font-mono text-[8px] font-bold border ${
+                  isVideoPlaying
+                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
+                    : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                }`}
+              >
+                {isVideoPlaying ? 'LECTURE' : 'PAUSE'}
+              </span>
+              <span className="truncate max-w-[280px] text-white font-medium text-[11px] drop-shadow">
+                {currentVideo.title}
               </span>
             </div>
 
-            {/* Center Play/Pause indicator when paused */}
-            {!isVideoPlaying && (
-              <div className="self-center flex items-center justify-center w-12 h-12 rounded-full bg-black/60 border border-white/20 text-white/80 shadow-2xl backdrop-blur-sm">
-                <svg className="w-5 h-5 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+            {/* Côté Droit (Flexbox en ligne avec gap-2) */}
+            <div className="flex items-center gap-2 text-[9px] font-mono text-white/80 flex-shrink-0">
+              <span className="text-white/70">{dateStr}</span>
+              <span className="font-bold text-white">{timeStr}</span>
+              <span className="px-1 py-0.5 rounded bg-white/10 text-[8px] text-white/60 border border-white/15">
+                {currentVideo.codec || 'MPEG-4 / H.264'}
+              </span>
+              <div className="flex items-center gap-1 bg-white/10 px-1 py-0.5 rounded border border-white/20">
+                <div className="w-3.5 h-1.5 border border-white/90 rounded-[1px] p-[1px] flex gap-[1px]">
+                  <div className="bg-white/95 w-1 h-full rounded-[0.5px]"></div>
+                  <div className="bg-white/95 w-1 h-full rounded-[0.5px]"></div>
+                  <div className="bg-white/95 w-1 h-full rounded-[0.5px]"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Indicateur Central Play / Pause (uniquement en pause) */}
+          {!isVideoPlaying && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-25">
+              <div className="w-14 h-14 rounded-full bg-black/60 border border-white/20 flex items-center justify-center text-white/90 shadow-2xl backdrop-blur-sm animate-fade-in">
+                <svg className="w-6 h-6 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M8 5v14l11-7z" />
                 </svg>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Bottom Progress & Video Controls Bar */}
-            <div className="bg-gradient-to-t from-black/85 via-black/50 to-transparent p-2 rounded-b-lg -mx-3 -mb-3 flex flex-col gap-1">
-              <div className="flex justify-between items-center text-[9px] font-mono text-white/80">
-                <span>
-                  {Math.floor(videoProgress.current / 60)}:
-                  {String(Math.floor(videoProgress.current % 60)).padStart(2, '0')}
-                </span>
-                <span className="text-[8px] text-white/50">
-                  {currentVideo.artist || 'Sélection Personnelle'}
-                </span>
-                <span>
-                  {Math.floor(videoProgress.duration / 60)}:
-                  {String(Math.floor(videoProgress.duration % 60)).padStart(2, '0')}
-                </span>
-              </div>
-              <div className="w-full bg-white/20 h-1.5 rounded-full overflow-hidden shadow-inner">
+          {/* Barre Inférieure (Bottom HUD) */}
+          <div
+            className={`absolute bottom-0 left-0 right-0 p-3 flex flex-col gap-1 bg-gradient-to-t from-black/80 to-transparent z-30 transition-opacity duration-300 ${
+              showVideoHUD || !isVideoPlaying ? 'opacity-100' : 'opacity-0'
+            }`}
+          >
+            {/* Ligne 1: Timeline & Timestamps */}
+            <div className="flex items-center gap-2 text-[9px] font-mono text-white/80">
+              <span className="min-w-[28px] text-right">{formatTime(videoProgress.current)}</span>
+              <div className="flex-1 h-1 bg-white/20 rounded overflow-hidden shadow-inner">
                 <div
-                  className="bg-gradient-to-r from-cyan-400 to-blue-500 h-full rounded-full transition-all duration-150"
+                  className="h-full bg-gradient-to-r from-cyan-400 to-blue-500 rounded transition-all duration-150"
                   style={{
                     width: `${
                       videoProgress.duration > 0
@@ -782,6 +854,12 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                   }}
                 />
               </div>
+              <span className="min-w-[28px]">{formatTime(videoProgress.duration)}</span>
+            </div>
+
+            {/* Ligne 2: Aide mémoire touches PSP */}
+            <div className="text-[8px] font-mono text-white/50 text-center">
+              ✕ Pause/Play • ◯ Quitter • ◄/► Reculer/Avancer (5s)
             </div>
           </div>
         </div>
