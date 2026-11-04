@@ -1,19 +1,10 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { WaveBackground } from './WaveBackground';
 import { XMBMenu } from './XMBMenu';
-import { PSPTheme, PSP_OFFICIAL_THEMES, XMBContextInfo } from '../types/xmb';
+import { PSPTheme, PSP_OFFICIAL_THEMES } from '../types/xmb';
 import { useAudio } from './AudioEngine';
 import { sound } from '../services/sound';
 import { useGamepad } from '../hooks/useGamepad';
-
-// Dictionnaire des textes de didacticiel / raccourcis contextuels PSP
-const CONTEXT_HELP_TEXTS: Record<XMBContextInfo, string> = {
-  xmb_menu: '🎮 D-Pad / Flèches : Naviguer • ✕ : Ouvrir / Valider • □ : Lecture rapide • △ : Options',
-  music_sublist: '🎮 ▲/▼ : Choisir piste • ✕ : Lancer lecture • ◯ : Dossier parent • △ : Options dossier',
-  music_player: '🎮 L/R : Piste préc./suiv. • ✕ / □ : Play/Pause • ◯ : Retour sous-liste • △ : Options / Visualiseur • SELECT : Visualiseur direct',
-  video_player: '🎮 ◄/► : Reculer / Avancer (10s) • ✕ / □ : Play/Pause • ◯ : Quitter vidéo • △ : Ratio d\'aspect',
-  game: '🎮 Souris / Trackpad : Déplacer raquette • Clic / ✕ : Lancer balle • SELECT : Mixeur multipiste • ◯ : Quitter jeu',
-};
 
 // Chassis Configuration allowing easy switching between models/colors later
 export const PSP_CHASSIS_CONFIG = {
@@ -65,10 +56,66 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
     timestamp: number;
   } | null>(null);
 
-  const [activeContext, setActiveContext] = useState<XMBContextInfo>('xmb_menu');
-
   const { togglePlay, showVolumeOSD, volume } = useAudio();
   const [powerOn] = useState<boolean>(true);
+
+  // Chantier 1 & 2 : Détection mode portrait (Rotate Guard) et auto-scale proportionnel via visualViewport
+  const [scale, setScale] = useState<number>(1);
+  const [isPortrait, setIsPortrait] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const vw = window.visualViewport ? window.visualViewport.width : window.innerWidth;
+    const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    return vw <= 950 && vh > vw;
+  });
+
+  useEffect(() => {
+    const updateScale = () => {
+      // Zone visible réelle tenant compte des barres de navigation Safari
+      const vw = window.visualViewport ? window.visualViewport.width : window.innerWidth;
+      const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+
+      // Détection mode portrait (Rotate Guard sous 950px)
+      const portrait = vw <= 950 && vh > vw;
+      setIsPortrait(portrait);
+
+      // Marges de sécurité adaptatives (Dynamic Island, barre Safari et bordures)
+      const paddingX = 40;
+      const paddingY = 24;
+
+      const targetWidth = 940;
+      const targetHeight = 460;
+
+      const availableWidth = Math.max(300, vw - paddingX);
+      const availableHeight = Math.max(200, vh - paddingY);
+
+      const scaleX = availableWidth / targetWidth;
+      const scaleY = availableHeight / targetHeight;
+
+      // Dézoom de confort (multiplicateur 0.94) pour aérer la console
+      const computedScale = Math.min(1, scaleX, scaleY) * 0.94;
+
+      setScale(Math.max(0.32, computedScale));
+    };
+
+    updateScale();
+
+    // Écoute des redimensionnements de la zone Safari
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', updateScale);
+      window.visualViewport.addEventListener('scroll', updateScale);
+    }
+    window.addEventListener('resize', updateScale);
+    window.addEventListener('orientationchange', updateScale);
+
+    return () => {
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', updateScale);
+        window.visualViewport.removeEventListener('scroll', updateScale);
+      }
+      window.removeEventListener('resize', updateScale);
+      window.removeEventListener('orientationchange', updateScale);
+    };
+  }, []);
 
   // Send command to XMB screen without losing focus
   const sendCommand = useCallback((action: string) => {
@@ -150,20 +197,56 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
   });
 
   return (
-    <div className="relative min-h-screen w-full bg-[#08090c] flex flex-col items-center justify-center p-2 sm:p-6 overflow-hidden font-['Inter',sans-serif]">
+    <div className="relative min-h-screen h-screen w-full bg-[#08090c] flex flex-col items-center justify-center p-1 sm:p-6 overflow-hidden font-['Inter',sans-serif]">
       {/* Background ambient lighting */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(40,55,75,0.18),rgba(0,0,0,0.96))] pointer-events-none"></div>
 
+      {/* ========================================================
+          CHANTIER 1 : ÉCRAN DE GARDE EN MODE PORTRAIT (ROTATE GUARD)
+          ======================================================== */}
+      {isPortrait && (
+        <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-2xl flex flex-col items-center justify-center text-white text-center p-6 select-none">
+          {/* Smartphone avec animation douce */}
+          <div className="relative mb-6 flex items-center justify-center">
+            <div className="w-12 h-20 border-2 border-white/80 rounded-2xl flex flex-col items-center justify-between p-2 shadow-[0_0_25px_rgba(255,255,255,0.2)] animate-pulse">
+              <div className="w-4 h-1 bg-white/40 rounded-full" />
+              <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center">
+                <svg
+                  className="w-4 h-4 text-emerald-400 animate-spin"
+                  style={{ animationDuration: '4s' }}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+              </div>
+              <div className="w-2 h-2 border border-white/40 rounded-full" />
+            </div>
+          </div>
+          <h2 className="text-base font-semibold tracking-wide">Mode Paysage Requis</h2>
+          <p className="text-xs text-white/60 mt-1 max-w-xs font-mono">
+            Pivote ton appareil à l'horizontale pour utiliser la console.
+          </p>
+        </div>
+      )}
 
       {/* ========================================================
           CONTENEUR GLOBAL AU RATIO FIXE DE LA CONSOLE (~2.36:1)
           Mécanique d'Architecture Calque Style Apple Music 404
           ======================================================== */}
       <div
-        className="relative z-10 w-full max-w-[1024px] aspect-[1024/433] select-none flex items-center justify-center drop-shadow-[0_35px_50px_rgba(0,0,0,0.95)]"
+        className="relative z-10 w-[940px] max-w-none aspect-[1024/433] select-none flex items-center justify-center drop-shadow-[0_35px_50px_rgba(0,0,0,0.95)] flex-shrink-0"
         onContextMenu={(e) => e.preventDefault()}
         style={{
           '--psp-chassis-url': `url(${activeChassis.image})`,
+          transform: `scale(${scale})`,
+          transformOrigin: 'center center',
         } as React.CSSProperties}
       >
         {/* ========================================================
@@ -208,7 +291,6 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
                 onThemeChange={setTheme}
                 externalCommand={externalCommand}
                 debugHitboxes={debugHitboxes}
-                onContextChange={setActiveContext}
               />
 
               {/* Authentic PSP Volume OSD Overlay */}
@@ -420,9 +502,11 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
         </div>
       </div>
 
-      {/* SHORTCUTS & ACCESSIBILITY BAR (LÉGENDE CONTEXTUELLE DYNAMIQUE) */}
-      <div className="max-w-4xl mx-auto mt-4 px-5 py-2 bg-black/40 hover:bg-black/80 backdrop-blur-xl border border-white/5 hover:border-white/10 rounded-full transition-all duration-300 opacity-30 hover:opacity-100 flex items-center justify-center gap-2 text-[11px] font-mono text-white/70 select-none shadow-lg text-center flex-wrap">
-        <span>{CONTEXT_HELP_TEXTS[activeContext]}</span>
+      {/* COMMANDES MATÉRIELLES DU CHÂSSIS (FOOTER FLOTTANT ÉPURÉ) */}
+      <div className="max-w-4xl mx-auto mt-4 px-5 py-2 bg-black/40 hover:bg-black/80 backdrop-blur-xl border border-white/5 hover:border-white/10 rounded-full transition-opacity duration-300 opacity-25 hover:opacity-90 flex items-center justify-center select-none shadow-lg">
+        <p className="text-[11px] font-mono text-white/50 tracking-wide select-none">
+          🎮 D-Pad • Ⓢ Home • VOL +/- • SELECT • START
+        </p>
       </div>
     </div>
   );
