@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { WaveBackground } from './WaveBackground';
 import { XMBMenu } from './XMBMenu';
 import { PSPTheme, PSP_OFFICIAL_THEMES } from '../types/xmb';
@@ -58,6 +58,27 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
 
   const { togglePlay, showVolumeOSD, volume } = useAudio();
   const [powerOn] = useState<boolean>(true);
+
+  // Étape 2 : Cold Boot Sony (Démarrage immédiat)
+  const [isColdBooting, setIsColdBooting] = useState<boolean>(true);
+  const [isColdBootFading, setIsColdBootFading] = useState<boolean>(false);
+  const coldBootVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    if (coldBootVideoRef.current) {
+      coldBootVideoRef.current.volume = 0.35; // 35 % pour éviter toute saturation
+      coldBootVideoRef.current.play().catch(() => {
+        /* repli silencieux si le navigateur bloque l'autoplay */
+      });
+    }
+  }, []);
+
+  const handleColdBootEnded = () => {
+    setIsColdBootFading(true);
+    setTimeout(() => {
+      setIsColdBooting(false);
+    }, 500);
+  };
 
   // Chantier 1 & 2 : Détection mode portrait (Rotate Guard) et auto-scale proportionnel via visualViewport
   const [scale, setScale] = useState<number>(1);
@@ -320,6 +341,21 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
 
               {/* Reflet subtil de vitre LCD */}
               <div className="absolute inset-0 pointer-events-none bg-gradient-to-tr from-transparent via-white/[0.02] to-white/[0.06]"></div>
+
+              {/* Étape 2 : Cold Boot Sony (Démarrage immédiat) */}
+              {isColdBooting && (
+                <video
+                  ref={coldBootVideoRef}
+                  src="/media/coldboot.mp4"
+                  autoPlay
+                  playsInline
+                  onEnded={handleColdBootEnded}
+                  onError={handleColdBootEnded}
+                  className={`absolute inset-0 w-full h-full object-cover z-30 bg-black pointer-events-none select-none transition-opacity duration-500 ${
+                    isColdBootFading ? 'opacity-0' : 'opacity-100'
+                  }`}
+                />
+              )}
             </>
           ) : (
             <div className="w-full h-full bg-black flex items-center justify-center text-white/30 text-xs">

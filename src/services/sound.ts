@@ -1,8 +1,58 @@
-// Web Audio API Synthesizer for Authentic Retro PSP UI Sounds
+// Service Audio Natif Sony PSP - Remplacement des bruitages synthétiques par les SFX authentiques
 class SoundService {
   private ctx: AudioContext | null = null;
   private isMuted: boolean = false;
   private volume: number = 1.0;
+  private systemOkBuffer: AudioBuffer | null = null;
+  private systemOkAudio: HTMLAudioElement | null = null;
+
+  constructor() {
+    this.preload();
+  }
+
+  // Préchargement natif hybride : Buffer Web Audio pour zéro latence + repli HTML5 Audio
+  private preload() {
+    if (typeof window === 'undefined') return;
+
+    // 1. Préchargement HTML5 Audio pour disponibilité immédiate
+    try {
+      this.systemOkAudio = new Audio('/audio/sfx/system_ok.mp3');
+      this.systemOkAudio.preload = 'auto';
+      this.systemOkAudio.volume = 0.28;
+      this.systemOkAudio.load();
+    } catch {}
+
+    // 2. Préchargement et décodage du buffer Web Audio (lecture polyphonique et instantanée)
+    try {
+      fetch('/audio/sfx/system_ok.mp3')
+        .then((res) => {
+          if (!res.ok) throw new Error('Échec du téléchargement SFX');
+          return res.arrayBuffer();
+        })
+        .then((arrayBuffer) => {
+          const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
+          if (!AudioCtxClass) return;
+
+          // Décodage avec OfflineAudioContext pour éviter d'activer l'AudioContext avant interaction utilisateur
+          const OfflineCtxClass = window.OfflineAudioContext || (window as any).webkitOfflineAudioContext;
+          if (OfflineCtxClass) {
+            const offlineCtx = new OfflineCtxClass(1, 44100, 44100);
+            return offlineCtx.decodeAudioData(arrayBuffer);
+          } else {
+            const ctx = this.getContext();
+            return ctx.decodeAudioData(arrayBuffer);
+          }
+        })
+        .then((decodedBuffer) => {
+          if (decodedBuffer) {
+            this.systemOkBuffer = decodedBuffer;
+          }
+        })
+        .catch(() => {
+          // Repli automatique sur HTML5 Audio
+        });
+    } catch {}
+  }
 
   private getContext(): AudioContext {
     if (!this.ctx) {
@@ -10,7 +60,7 @@ class SoundService {
       this.ctx = new AudioCtx();
     }
     if (this.ctx.state === 'suspended') {
-      this.ctx.resume();
+      this.ctx.resume().catch(() => {});
     }
     return this.ctx;
   }
@@ -36,122 +86,58 @@ class SoundService {
     return this.isMuted;
   }
 
-  // Authentic Sony PSP XMB navigation tick
+  // Déplacement de curseur : suppression des oscillateurs synthétiques artificiels (sons IA)
   public playTick() {
-    if (this.isMuted || this.volume <= 0.001) return;
-    try {
-      const ctx = this.getContext();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(1200, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(700, ctx.currentTime + 0.04);
-
-      gain.gain.setValueAtTime(0.25 * this.volume, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.04);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc.start();
-      osc.stop(ctx.currentTime + 0.045);
-    } catch {
-      // AudioContext policy before user interaction
-    }
+    // Synthèse artificielle createOscillator dépréciée et retirée
   }
 
   public playCursor() {
     this.playTick();
   }
 
-  // Authentic Sony PSP validation chime (✕ button)
+  // Bruitage officiel Sony PSP (✕, validation de dossiers, morceaux et actions système)
   public playEnter() {
     if (this.isMuted || this.volume <= 0.001) return;
+
+    // 1. Lecture prioritaire via Web Audio API Buffer (zéro latence & polyphonie)
     try {
-      const ctx = this.getContext();
-      const now = ctx.currentTime;
+      if (this.systemOkBuffer) {
+        const ctx = this.getContext();
+        const source = ctx.createBufferSource();
+        source.buffer = this.systemOkBuffer;
 
-      // Note 1: High crisp harmonic
-      const osc1 = ctx.createOscillator();
-      const gain1 = ctx.createGain();
-      osc1.type = 'sine';
-      osc1.frequency.setValueAtTime(1046.5, now); // C6
-      gain1.gain.setValueAtTime(0.2 * this.volume, now);
-      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
-      osc1.connect(gain1);
-      gain1.connect(ctx.destination);
-      osc1.start(now);
-      osc1.stop(now + 0.23);
+        const gainNode = ctx.createGain();
+        // Calibré discret entre 0.25 et 0.30 (28 %) pour un rendu feutré et non agressif
+        gainNode.gain.setValueAtTime(0.28 * this.volume, ctx.currentTime);
 
-      // Note 2: E6 harmonic chime slightly offset
-      const osc2 = ctx.createOscillator();
-      const gain2 = ctx.createGain();
-      osc2.type = 'sine';
-      osc2.frequency.setValueAtTime(1318.5, now + 0.04); // E6
-      gain2.gain.setValueAtTime(0.25 * this.volume, now + 0.04);
-      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-      osc2.connect(gain2);
-      gain2.connect(ctx.destination);
-      osc2.start(now + 0.04);
-      osc2.stop(now + 0.36);
+        source.connect(gainNode);
+        gainNode.connect(ctx.destination);
+
+        source.start(0);
+        return;
+      }
     } catch {
-      // ignore
+      // repli en cas de suspension de contexte
     }
+
+    // 2. Repli fluide sur HTML5 Audio
+    try {
+      if (this.systemOkAudio) {
+        const soundClone = this.systemOkAudio.cloneNode() as HTMLAudioElement;
+        soundClone.volume = Math.max(0, Math.min(1, 0.28 * this.volume));
+        soundClone.play().catch(() => {});
+      }
+    } catch {}
   }
 
-  // Authentic Sony PSP cancel / back chime (◯ button)
+  // Retour arrière (◯) : suppression de l'oscillateur synthétique
   public playBack() {
-    if (this.isMuted || this.volume <= 0.001) return;
-    try {
-      const ctx = this.getContext();
-      const now = ctx.currentTime;
-
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(880, now); // A5
-      osc.frequency.exponentialRampToValueAtTime(440, now + 0.16); // A4
-
-      gain.gain.setValueAtTime(0.2 * this.volume, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc.start(now);
-      osc.stop(now + 0.19);
-    } catch {
-      // ignore
-    }
+    // Synthèse artificielle createOscillator dépréciée et retirée
   }
 
-  // Options / Triangle sound
+  // Options (△) : suppression de l'oscillateur synthétique
   public playOption() {
-    if (this.isMuted || this.volume <= 0.001) return;
-    try {
-      const ctx = this.getContext();
-      const now = ctx.currentTime;
-
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(1500, now);
-      osc.frequency.linearRampToValueAtTime(1800, now + 0.08);
-
-      gain.gain.setValueAtTime(0.18 * this.volume, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc.start(now);
-      osc.stop(now + 0.11);
-    } catch {
-      // ignore
-    }
+    // Synthèse artificielle createOscillator dépréciée et retirée
   }
 }
 
