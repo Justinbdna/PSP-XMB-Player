@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { sound } from '../../services/sound';
+import { useAudio } from '../AudioEngine';
 
 interface RetroBrickGameProps {
   onExit: () => void;
@@ -16,6 +17,12 @@ interface Brick {
   alive: boolean;
 }
 
+const TRACKS = [
+  { id: 'master', label: 'MASTER' },
+  { id: 'bgm', label: 'BGM (MUSIQUE)' },
+  { id: 'sfx', label: 'SFX (BRUITAGES)' },
+];
+
 interface Particle {
   x: number;
   y: number;
@@ -31,6 +38,60 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
   externalCommand,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const { volume: engineVolume, setVolume: setEngineVolume } = useAudio();
+
+  // Niveaux de volume indépendants (Master, BGM, SFX)
+  const [masterVolume, setMasterVolume] = useState<number>(1.0);
+  const [bgmVolume, setBgmVolume] = useState<number>(() => (typeof engineVolume === 'number' ? engineVolume : 0.8));
+  const [sfxVolume, setSfxVolume] = useState<number>(1.0);
+  const [isMixerOpen, setIsMixerOpen] = useState<boolean>(false);
+  const [selectedTrack, setSelectedTrack] = useState<number>(0); // 0: Master, 1: BGM, 2: SFX
+
+  const masterRef = useRef(masterVolume);
+  masterRef.current = masterVolume;
+  const bgmRef = useRef(bgmVolume);
+  bgmRef.current = bgmVolume;
+  const sfxRef = useRef(sfxVolume);
+  sfxRef.current = sfxVolume;
+  const isMixerOpenRef = useRef(isMixerOpen);
+  isMixerOpenRef.current = isMixerOpen;
+  const selectedTrackRef = useRef(selectedTrack);
+  selectedTrackRef.current = selectedTrack;
+
+  // Réinitialisation du volume des bruitages à la sortie
+  useEffect(() => {
+    return () => {
+      sound.setVolume(1.0);
+    };
+  }, []);
+
+  // Réglage du volume par palier de 10%
+  const adjustTrackVolume = useCallback((trackIdx: number, delta: number) => {
+    sound.playTick();
+    if (trackIdx === 0) {
+      const nextMaster = Math.max(0, Math.min(1, Math.round((masterRef.current + delta) * 10) / 10));
+      setMasterVolume(nextMaster);
+      setEngineVolume(Math.round(nextMaster * bgmRef.current * 100) / 100);
+      sound.setVolume(Math.round(nextMaster * sfxRef.current * 100) / 100);
+    } else if (trackIdx === 1) {
+      const nextBgm = Math.max(0, Math.min(1, Math.round((bgmRef.current + delta) * 10) / 10));
+      setBgmVolume(nextBgm);
+      setEngineVolume(Math.round(masterRef.current * nextBgm * 100) / 100);
+    } else if (trackIdx === 2) {
+      const nextSfx = Math.max(0, Math.min(1, Math.round((sfxRef.current + delta) * 10) / 10));
+      setSfxVolume(nextSfx);
+      sound.setVolume(Math.round(masterRef.current * nextSfx * 100) / 100);
+    }
+  }, [setEngineVolume]);
+
+  const renderAsciiBar = (value: number): string => {
+    const totalBars = 10;
+    const filledBars = Math.max(0, Math.min(totalBars, Math.round(value * totalBars)));
+    const filled = '█'.repeat(filledBars);
+    const empty = '░'.repeat(totalBars - filledBars);
+    const percent = Math.round(value * 100);
+    return `[${filled}${empty}] ${percent}%`;
+  };
 
   const [highScore, setHighScore] = useState<number>(() => {
     try {
@@ -110,22 +171,26 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
     g.lives = 3;
   };
 
-  const launchBall = () => {
+  const launchBall = useCallback(() => {
+    if (isMixerOpenRef.current) return;
     const g = gameRef.current;
     if (g.state === 'ready' || g.state === 'gameover' || g.state === 'victory') {
       startNewGame();
+      g.ballAttached = false;
+      g.ballVx = (Math.random() > 0.5 ? 1 : -1) * 3;
+      g.ballVy = -4;
+      try { sound.playEnter(); } catch (e) {}
       return;
     }
     if (g.state === 'playing') {
       if (g.ballAttached) {
         g.ballAttached = false;
         try { sound.playEnter(); } catch (e) {}
-        // Impulsion initiale de la balle
-        g.ballVx = 3;
+        g.ballVx = (Math.random() > 0.5 ? 1 : -1) * 3;
         g.ballVy = -4;
       }
     }
-  };
+  }, []);
 
   const spawnParticles = (x: number, y: number, color: string) => {
     for (let i = 0; i < 8; i++) {
@@ -186,6 +251,44 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
+
+      // Touches d'ouverture/fermeture du mixeur audio
+      if (key === 'tab' || key === 'v' || key === 'p') {
+        e.preventDefault();
+        setIsMixerOpen((prev) => {
+          const next = !prev;
+          if (next) sound.playOption();
+          else sound.playBack();
+          return next;
+        });
+        return;
+      }
+
+      // Si le mixeur est ouvert : navigation et réglages du mixeur
+      if (isMixerOpenRef.current) {
+        if (e.key === 'ArrowUp' || key === 'z' || key === 'w') {
+          e.preventDefault();
+          setSelectedTrack((prev) => (prev > 0 ? prev - 1 : 2));
+          sound.playTick();
+        } else if (e.key === 'ArrowDown' || key === 's') {
+          e.preventDefault();
+          setSelectedTrack((prev) => (prev < 2 ? prev + 1 : 0));
+          sound.playTick();
+        } else if (e.key === 'ArrowLeft' || key === 'q' || key === 'a') {
+          e.preventDefault();
+          adjustTrackVolume(selectedTrackRef.current, -0.1);
+        } else if (e.key === 'ArrowRight' || key === 'd') {
+          e.preventDefault();
+          adjustTrackVolume(selectedTrackRef.current, 0.1);
+        } else if (e.key === 'Escape' || e.key === 'Enter' || key === 'x' || key === 'o' || e.key === ' ' || e.key === 'Backspace') {
+          e.preventDefault();
+          setIsMixerOpen(false);
+          sound.playBack();
+        }
+        return;
+      }
+
+      // Contrôles normaux en jeu
       if (e.key === 'ArrowLeft' || key === 'q') {
         gameRef.current.keys.left = true;
       } else if (e.key === 'ArrowRight' || key === 'd') {
@@ -215,13 +318,44 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [onExit]);
+  }, [onExit, launchBall, adjustTrackVolume]);
 
   // Commandes externes issues des boutons matériels PSP
   useEffect(() => {
     if (!externalCommand) return;
     const { action } = externalCommand;
 
+    // Bascule du mixeur audio sur START ou SELECT
+    if (action === 'start' || action === 'select') {
+      setIsMixerOpen((prev) => {
+        const next = !prev;
+        if (next) sound.playOption();
+        else sound.playBack();
+        return next;
+      });
+      return;
+    }
+
+    // Si le mixeur est actif
+    if (isMixerOpenRef.current) {
+      if (action === 'up') {
+        setSelectedTrack((prev) => (prev > 0 ? prev - 1 : 2));
+        sound.playTick();
+      } else if (action === 'down') {
+        setSelectedTrack((prev) => (prev < 2 ? prev + 1 : 0));
+        sound.playTick();
+      } else if (action === 'left') {
+        adjustTrackVolume(selectedTrackRef.current, -0.1);
+      } else if (action === 'right') {
+        adjustTrackVolume(selectedTrackRef.current, 0.1);
+      } else if (action === 'cross' || action === 'circle') {
+        setIsMixerOpen(false);
+        sound.playBack();
+      }
+      return;
+    }
+
+    // Commandes en jeu standard
     if (action === 'left') {
       gameRef.current.paddleX = Math.max(10, gameRef.current.paddleX - 28);
       if (gameRef.current.ballAttached) {
@@ -243,7 +377,7 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
       sound.playBack();
       onExit();
     }
-  }, [externalCommand, onExit]);
+  }, [externalCommand, onExit, launchBall, adjustTrackVolume]);
 
   // Boucle de rendu Canvas 2D (480x272 pixels natifs PSP)
   useEffect(() => {
@@ -257,6 +391,12 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
     let animationId: number;
 
     const render = () => {
+      // Pause de la simulation si le mixeur est ouvert
+      if (isMixerOpenRef.current) {
+        animationId = requestAnimationFrame(render);
+        return;
+      }
+
       const g = gameRef.current;
       const W = 480;
       const H = 272;
@@ -580,6 +720,7 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
     <div
       id="psp-game-viewport"
       className="relative w-full h-full bg-black select-none overflow-hidden flex flex-col justify-between"
+      onClick={launchBall}
     >
       <canvas
         ref={canvasRef}
@@ -593,10 +734,115 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
         className="w-full h-full object-contain bg-black cursor-pointer touch-none"
       />
 
-      {/* Ligne d'aide unique et centrée au bas de l'écran (Chantier 2) */}
-      <div className="absolute bottom-1.5 left-0 right-0 flex items-center justify-center text-[8.5px] font-mono text-white/60 pointer-events-none z-10 tracking-wide">
-        [Trackpad / Souris] Déplacer • [Clic / ✕] Lancer • [◯] Quitter
+      {/* Ligne d'aide au bas de l'écran avec bouton mixeur interactif */}
+      <div className="absolute bottom-1 left-2 right-2 flex items-center justify-between text-[8px] font-mono text-white/60 pointer-events-none z-10 tracking-wide">
+        <span>[Trackpad / Souris] Déplacer • [Clic / ✕] Lancer • [◯] Quitter</span>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsMixerOpen((prev) => {
+              const next = !prev;
+              if (next) sound.playOption();
+              else sound.playBack();
+              return next;
+            });
+          }}
+          className="pointer-events-auto px-2 py-0.5 rounded bg-black/60 hover:bg-emerald-950/80 active:scale-95 border border-emerald-500/40 text-[8.5px] font-mono text-emerald-300 backdrop-blur-sm transition-all flex items-center space-x-1"
+          title="Ouvrir le mixeur audio (START ou SELECT)"
+        >
+          <span>🎛️</span>
+          <span>MIxEUR [START]</span>
+        </button>
       </div>
+
+      {/* Overlay Rétro Mixeur Multipiste */}
+      {isMixerOpen && (
+        <div
+          className="absolute inset-0 z-30 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in p-4"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="w-[360px] max-w-[95%] bg-[#080d14]/95 border-2 border-emerald-500/70 rounded-lg p-3 shadow-2xl shadow-emerald-950/60 font-mono text-white select-none">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-emerald-500/30 pb-1 mb-2">
+              <div className="flex items-center space-x-1.5">
+                <span className="text-emerald-400 text-xs">🎛️</span>
+                <span className="text-[11px] font-bold tracking-wider text-emerald-400 uppercase">
+                  [ MIXEUR AUDIO PSP ]
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  setIsMixerOpen(false);
+                  sound.playBack();
+                }}
+                className="text-[9px] text-slate-400 hover:text-white px-1.5 py-0.5 rounded border border-white/10 hover:border-white/30 transition-colors"
+              >
+                [✕ Fermer]
+              </button>
+            </div>
+
+            {/* Pistes de volume */}
+            <div className="space-y-1.5 mb-2.5">
+              {TRACKS.map((t, idx) => {
+                const isSelected = selectedTrack === idx;
+                const val = idx === 0 ? masterVolume : idx === 1 ? bgmVolume : sfxVolume;
+                return (
+                  <div
+                    key={t.id}
+                    onClick={() => {
+                      setSelectedTrack(idx);
+                      sound.playTick();
+                    }}
+                    className={`p-1.5 rounded transition-colors cursor-pointer border ${
+                      isSelected
+                        ? 'bg-emerald-950/60 border-emerald-400/80 text-white shadow-sm'
+                        : 'bg-black/40 border-transparent hover:border-white/10 text-slate-300'
+                    }`}
+                  >
+                    <div className="flex justify-between items-center text-[9.5px] font-semibold mb-0.5">
+                      <span className={isSelected ? 'text-emerald-300 font-bold' : ''}>
+                        {isSelected ? '▶ ' : '  '}
+                        {t.label}
+                      </span>
+                      <div className="flex items-center space-x-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            adjustTrackVolume(idx, -0.1);
+                          }}
+                          className="w-5 h-5 flex items-center justify-center rounded bg-slate-800 hover:bg-slate-700 active:scale-95 text-[11px] text-white border border-white/10"
+                          title="-10%"
+                        >
+                          -
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            adjustTrackVolume(idx, 0.1);
+                          }}
+                          className="w-5 h-5 flex items-center justify-center rounded bg-slate-800 hover:bg-slate-700 active:scale-95 text-[11px] text-white border border-white/10"
+                          title="+10%"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                    <div className="text-[9.5px] tracking-tight font-mono text-emerald-400/90 pl-3">
+                      {renderAsciiBar(val)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Aide navigation */}
+            <div className="pt-1.5 border-t border-emerald-500/20 flex items-center justify-between text-[7.5px] text-slate-400">
+              <span>▲▼ Piste • ◄► -/+</span>
+              <span>[START/SELECT/✕/◯] Fermer</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

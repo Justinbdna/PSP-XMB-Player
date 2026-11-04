@@ -400,9 +400,9 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
           {/* START : left 74.5%, top 92%, width 6%, height 6% */}
           <button
             onClick={() => {
-              togglePlay();
+              sendCommand('start');
             }}
-            aria-label="START (Play / Pause)"
+            aria-label="START (Pause / Play / Mixeur)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
             style={getHitboxStyle({ top: '92%', left: '74.5%', width: '6%', height: '6%', borderRadius: '4px' })}
           />

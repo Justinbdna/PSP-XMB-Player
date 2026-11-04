@@ -309,16 +309,9 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         {
           id: 'game-1',
           label: 'Mini Jeu Rétro',
-          sublabel: 'UMD™ Game (Démo) • Casse-briques',
+          sublabel: 'PlayStation Portable Studio • Casse-briques',
           icon: 'game',
-          type: 'action' as const,
-        },
-        {
-          id: 'game-ms',
-          label: 'Memory Stick™ (Jeux)',
-          sublabel: `${gamesList.length} titre UMD`,
-          icon: 'game',
-          type: 'folder' as const,
+          type: 'game' as const,
         },
       ],
     },
@@ -455,11 +448,34 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     setIsOptionsOpen(false);
   };
 
+  // Sortie propre et synchrone du mini-jeu (Touche ◯ / Échap) (Chantier 3)
+  const handleExitGame = () => {
+    try { sound.playBack(); } catch (e) {}
+    setViewMode('menu');
+    const gameCatIndex = categories.findIndex((c) => c.id === 'game');
+    if (gameCatIndex !== -1) {
+      setCatIndex(gameCatIndex);
+    }
+    setItemIndex(0);
+    setSubItemIndex(0);
+    stateRef.current.viewMode = 'menu';
+    stateRef.current.catIndex = gameCatIndex !== -1 ? gameCatIndex : stateRef.current.catIndex;
+    stateRef.current.itemIndex = 0;
+    stateRef.current.subItemIndex = 0;
+    setNavStack([]);
+  };
+
   // Pop state stack (Touche Rond ◯ / Échap / Backspace)
   // Quitte le lecteur pour revenir à la liste XMB SANS COUPER LE SON en arrière-plan
   const popState = () => {
     sound.playBack();
     const current = stateRef.current;
+
+    // Sortie propre et immédiate de l'écran de jeu
+    if (current.viewMode === 'game_screen') {
+      handleExitGame();
+      return;
+    }
 
     // Si le volet latéral d'options est ouvert, le fermer en priorité
     if (current.isOptionsOpen) {
@@ -717,7 +733,6 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   // Déclencheur dédié et autonome pour lancer le mini-jeu proprement (Chantier 1 & 2)
   const launchRetroGame = (gameItem?: any) => {
     try { sound.playEnter(); } catch (e) {} // Ne doit jamais bloquer l'exécution
-    pauseTrack();
     const targetGame = gameItem || gamesList[0] || { id: 'game-1', title: 'Mini Jeu Rétro' };
     setCurrentGame(targetGame);
     pushState('game_screen', 'game');
@@ -911,7 +926,13 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     } else if (action === 'home') {
       handleHome();
     } else if (action === 'select') {
-      handleSelect();
+      if (stateRef.current.viewMode !== 'game_screen') {
+        handleSelect();
+      }
+    } else if (action === 'start') {
+      if (stateRef.current.viewMode !== 'game_screen') {
+        togglePlay();
+      }
     }
   }, [externalCommand]);
 
@@ -1052,7 +1073,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       {/* 2. DEDICATED FULLSCREEN GAME ENGINE (RETRO BRICK BREAKER) */}
       {viewMode === 'game_screen' ? (
         <div className="absolute inset-0 z-20 overflow-hidden bg-black animate-fade-in">
-          <RetroBrickGame onExit={popState} externalCommand={externalCommand} />
+          <RetroBrickGame onExit={handleExitGame} externalCommand={externalCommand} />
         </div>
       ) : viewMode === 'video_player' && currentVideo ? (
         /* 3. DEDICATED FULLSCREEN VIDEO PLAYER (LECTEUR VIDÉO MP4 PLEIN ÉCRAN) */
