@@ -306,7 +306,20 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       name: 'Jeu',
       icon: 'game',
       items: [
-        { id: 'game-ms', label: 'Memory Stick™ (Jeux)', sublabel: `${gamesList.length} titre UMD`, icon: 'game', type: 'folder' },
+        {
+          id: 'game-1',
+          label: 'Mini Jeu Rétro',
+          sublabel: 'UMD™ Game (Démo) • Casse-briques',
+          icon: 'game',
+          type: 'action' as const,
+        },
+        {
+          id: 'game-ms',
+          label: 'Memory Stick™ (Jeux)',
+          sublabel: `${gamesList.length} titre UMD`,
+          icon: 'game',
+          type: 'folder' as const,
+        },
       ],
     },
     {
@@ -798,13 +811,18 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       if (currentItem.id === 'video-ms') targetType = 'video';
       if (currentItem.id === 'game-ms') targetType = 'game';
       pushState('sublist', targetType);
+    } else if (currentItem.id === 'game-1' || currentItem.type === 'game') {
+      const selectedGame = s.gamesList.find((g) => g.id === currentItem.id) || s.gamesList[0];
+      if (selectedGame) {
+        pauseTrack();
+        setCurrentGame(selectedGame);
+        pushState('game_screen', 'game');
+      }
+      return;
     } else if (currentItem.type === 'search') {
       setIsSearchModalOpen(true);
     } else if (currentItem.id === 'music-now') {
       if (currentTrack) {
-        pushState('player');
-      } else if (itunesTracks.length > 0) {
-        playTrack(itunesTracks[0], itunesTracks);
         pushState('player');
       }
     } else if (currentItem.id === 'search-daft-punk') {
@@ -823,12 +841,6 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     }
   };
 
-  // Sélection explicite et immédiate par clic souris / tap tactile (Chantier 1)
-  const handleItemSelect = (index: number) => {
-    stateRef.current.itemIndex = index;
-    setItemIndex(index);
-    handleValidate(index);
-  };
 
   // Touche Triangle (△ / Touche A) : Ouvrir / fermer le volet latéral d'options contextuelles
   const handleOptions = () => {
@@ -841,9 +853,9 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
   // Touche Carré (▢ / Touche Espace) : Déclencher immédiatement la bascule Play / Pause
   const handleSquare = () => {
-    sound.playTick();
     const s = stateRef.current;
     if (s.viewMode === 'video_player') {
+      sound.playTick();
       triggerVideoHUD();
       if (videoRef.current) {
         if (videoRef.current.paused) {
@@ -857,12 +869,13 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       return;
     }
 
-    // Bascule Play / Pause audio immédiate partout (lecteur, menu ou sous-dossier)
-    if (s.currentTrack) {
-      togglePlay();
-    } else if (itunesTracks.length > 0) {
-      playTrack(itunesTracks[0], itunesTracks);
+    // Si aucune piste n'a été sélectionnée manuellement par l'utilisateur, ne rien faire
+    if (!s.currentTrack) {
+      return;
     }
+
+    sound.playTick();
+    togglePlay();
   };
 
   // Execute iTunes Search
@@ -1313,7 +1326,8 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                       onClick={(e) => {
                         e.stopPropagation();
                         setItemIndex(idx);
-                        handleItemSelect(idx);
+                        stateRef.current.itemIndex = idx;
+                        handleValidate(idx);
                       }}
                       className={`h-11 flex items-center px-3 gap-3 rounded-lg cursor-pointer transition-all duration-200 ${
                         isSelected
@@ -1326,6 +1340,8 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                           '📁'
                         ) : item.type === 'search' ? (
                           '🔍'
+                        ) : item.icon === 'game' ? (
+                          '🎮'
                         ) : (
                           '🎵'
                         )}
@@ -1415,9 +1431,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                           e.stopPropagation();
                           setSubItemIndex(idx);
                           stateRef.current.subItemIndex = idx;
-                          pauseTrack();
-                          setCurrentGame(game);
-                          pushState('game_screen', 'game');
+                          handleValidate(idx);
                         }}
                         className={`h-12 flex items-center px-3 gap-2.5 rounded-lg cursor-pointer transition-all duration-200 ${
                           isSelected
@@ -1466,10 +1480,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                             e.stopPropagation();
                             setSubItemIndex(idx);
                             stateRef.current.subItemIndex = idx;
-                            pauseTrack();
-                            setCurrentVideo(video);
-                            setIsVideoPlaying(true);
-                            pushState('video_player', 'video');
+                            handleValidate(idx);
                           }}
                           className={`h-12 flex items-center px-3 gap-2.5 rounded-lg cursor-pointer transition-all duration-200 ${
                             isSelected
@@ -1540,8 +1551,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                           e.stopPropagation();
                           setSubItemIndex(idx);
                           stateRef.current.subItemIndex = idx;
-                          playTrack(track, currentSubList);
-                          pushState('player');
+                          handleValidate(idx);
                         }}
                         className={`h-12 flex items-center px-3 gap-2.5 rounded-lg cursor-pointer transition-all duration-200 ${
                           isSelected

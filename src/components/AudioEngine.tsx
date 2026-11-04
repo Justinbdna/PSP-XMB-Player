@@ -472,14 +472,13 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const togglePlay = async () => {
-    const audio = getActiveAudio();
-    if (!audio) return;
     if (!currentTrack) {
-      if (playlistRef.current.length > 0) {
-        playTrack(playlistRef.current[0]);
-      }
+      // Si aucune piste n'a été sélectionnée manuellement par l'utilisateur, ne rien faire
       return;
     }
+
+    const audio = getActiveAudio();
+    if (!audio) return;
 
     if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
       try {
