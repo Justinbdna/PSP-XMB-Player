@@ -110,11 +110,11 @@ export const PSPConsole: React.FC = () => {
     },
     onL: () => {
       sound.playTick();
-      sendCommand('left');
+      sendCommand('trigger_l');
     },
     onR: () => {
       sound.playTick();
-      sendCommand('right');
+      sendCommand('trigger_r');
     },
   });
 
@@ -257,9 +257,9 @@ export const PSPConsole: React.FC = () => {
           <button
             onClick={() => {
               sound.playTick();
-              sendCommand('left');
+              sendCommand('trigger_l');
             }}
-            aria-label="Gâchette L (Catégorie Gauche)"
+            aria-label="Gâchette L (Précédent / Catégorie Gauche)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.94] transition-transform duration-75"
             style={getHitboxStyle({ top: '3.5%', left: '8.5%', width: '14%', height: '7%', borderRadius: '4px' })}
           />
@@ -268,9 +268,9 @@ export const PSPConsole: React.FC = () => {
           <button
             onClick={() => {
               sound.playTick();
-              sendCommand('right');
+              sendCommand('trigger_r');
             }}
-            aria-label="Gâchette R (Catégorie Droite)"
+            aria-label="Gâchette R (Suivant / Catégorie Droite)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.94] transition-transform duration-75"
             style={getHitboxStyle({ top: '3.5%', left: '91.5%', width: '14%', height: '7%', borderRadius: '4px' })}
           />
@@ -427,15 +427,17 @@ export const PSPConsole: React.FC = () => {
         <span>•</span>
         <span>⌨️ <b className="text-white/80">Flèches</b> : Naviguer</span>
         <span>•</span>
+        <span><b className="text-cyan-400">L / R (Q / E)</b> : Précédent / Suivant</span>
+        <span>•</span>
         <span><b className="text-blue-400">X / Entrée</b> : Valider / Lecture</span>
         <span>•</span>
         <span><b className="text-red-400">O / Échap</b> : Retour</span>
         <span>•</span>
         <span><b className="text-pink-400">▢ / Espace</b> : Play / Pause</span>
         <span>•</span>
-        <span><b className="text-emerald-400">△ / A</b> : Options</span>
+        <span><b className="text-emerald-400">△ / T</b> : Options</span>
         <span>•</span>
-        <span><b className="text-cyan-400">SELECT / Tab</b> : Visualiseur</span>
+        <span><b className="text-amber-400">SELECT / Tab</b> : Visualiseur</span>
         <span>•</span>
         <span><b className="text-white/80">H</b> : PS Home</span>
         {debugHitboxes && (

@@ -54,6 +54,8 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     analyser,
     isRealDSP,
     playTrack,
+    nextTrack,
+    previousTrack,
     pauseTrack,
     togglePlay,
     seekRelative,
@@ -339,6 +341,18 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     return localTracks;
   })();
 
+  // Synchroniser la sélection dans la liste avec le morceau en cours de lecture
+  useEffect(() => {
+    if (currentTrack && currentSubList.length > 0) {
+      const idx = currentSubList.findIndex(
+        (t) => (t.id && t.id === currentTrack.id) || t.url === currentTrack.url
+      );
+      if (idx >= 0) {
+        setSubItemIndex(idx);
+      }
+    }
+  }, [currentTrack, currentSubList]);
+
   // State reference to eliminate stale closures in keyboard / external / gamepad commands
   const stateRef = useRef({
     viewMode,
@@ -483,6 +497,82 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       onThemeChange(nextTheme);
       sound.playTick();
     }
+  };
+
+  // Lecture de la vidéo suivante (bouclage catalogue videos.json - Chantier 1 & 2)
+  const playNextVideo = useCallback(() => {
+    const list = stateRef.current.videosList;
+    if (!list || list.length === 0) return;
+    const current = stateRef.current.currentVideo;
+    const currIdx = current
+      ? list.findIndex((v) => v.id === current.id || v.url === current.url)
+      : -1;
+    const nextIdx = (currIdx + 1) % list.length;
+    const nextVideo = list[nextIdx];
+    if (nextVideo) {
+      setCurrentVideo(nextVideo);
+      setIsVideoPlaying(true);
+      triggerVideoHUD();
+      sound.playTick();
+      if (videoRef.current) {
+        videoRef.current.src = nextVideo.url;
+        videoRef.current.currentTime = 0;
+        videoRef.current.play().catch(console.warn);
+      }
+    }
+  }, [triggerVideoHUD]);
+
+  // Lecture de la vidéo précédente (bouclage catalogue videos.json - Chantier 1)
+  const playPreviousVideo = useCallback(() => {
+    const list = stateRef.current.videosList;
+    if (!list || list.length === 0) return;
+    const current = stateRef.current.currentVideo;
+    const currIdx = current
+      ? list.findIndex((v) => v.id === current.id || v.url === current.url)
+      : -1;
+    const prevIdx = currIdx > 0 ? currIdx - 1 : list.length - 1;
+    const prevVideo = list[prevIdx];
+    if (prevVideo) {
+      setCurrentVideo(prevVideo);
+      setIsVideoPlaying(true);
+      triggerVideoHUD();
+      sound.playTick();
+      if (videoRef.current) {
+        videoRef.current.src = prevVideo.url;
+        videoRef.current.currentTime = 0;
+        videoRef.current.play().catch(console.warn);
+      }
+    }
+  }, [triggerVideoHUD]);
+
+  // Gâchette L : Morceau / Vidéo précédent(e) ou Catégorie Gauche
+  const handleTriggerL = () => {
+    const s = stateRef.current;
+    if (s.viewMode === 'video_player') {
+      playPreviousVideo();
+      return;
+    }
+    if (s.viewMode === 'player') {
+      sound.playTick();
+      previousTrack();
+      return;
+    }
+    handleNav('left');
+  };
+
+  // Gâchette R : Morceau / Vidéo suivant(e) ou Catégorie Droite
+  const handleTriggerR = () => {
+    const s = stateRef.current;
+    if (s.viewMode === 'video_player') {
+      playNextVideo();
+      return;
+    }
+    if (s.viewMode === 'player') {
+      sound.playTick();
+      nextTrack();
+      return;
+    }
+    handleNav('right');
   };
 
   // Refactorisation stricte de la navigation directionnelle selon la logique Sony
@@ -670,7 +760,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       }
       const selectedTrack = s.currentSubList[activeSubIndex];
       if (selectedTrack) {
-        playTrack(selectedTrack);
+        playTrack(selectedTrack, s.currentSubList);
         pushState('player');
       }
       return;
@@ -696,7 +786,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       if (currentTrack) {
         pushState('player');
       } else if (itunesTracks.length > 0) {
-        playTrack(itunesTracks[0]);
+        playTrack(itunesTracks[0], itunesTracks);
         pushState('player');
       }
     } else if (currentItem.id === 'search-daft-punk') {
@@ -753,7 +843,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     if (s.currentTrack) {
       togglePlay();
     } else if (itunesTracks.length > 0) {
-      playTrack(itunesTracks[0]);
+      playTrack(itunesTracks[0], itunesTracks);
     }
   };
 
@@ -774,6 +864,10 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     const { action } = externalCommand;
     if (action === 'up' || action === 'down' || action === 'left' || action === 'right') {
       handleNav(action);
+    } else if (action === 'trigger_l') {
+      handleTriggerL();
+    } else if (action === 'trigger_r') {
+      handleTriggerR();
     } else if (action === 'cross') {
       handleValidate();
     } else if (action === 'circle') {
@@ -808,13 +902,19 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
         handleNav('right');
+      } else if (key === 'q' || e.key === '[' || (stateRef.current.viewMode !== 'menu' && key === 'a')) {
+        e.preventDefault();
+        handleTriggerL();
+      } else if (key === 'e' || e.key === ']') {
+        e.preventDefault();
+        handleTriggerR();
       } else if (key === 'x' || e.key === 'Enter') {
         e.preventDefault();
         handleValidate();
       } else if (key === 'o' || e.key === 'Escape' || e.key === 'Backspace') {
         e.preventDefault();
         popState();
-      } else if (key === 'a') {
+      } else if (key === 'a' || key === 't') {
         e.preventDefault();
         handleOptions();
       } else if (key === 's' || e.key === ' ') {
@@ -950,12 +1050,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
               }
             }}
             onEnded={() => {
-              setIsVideoPlaying(false);
-              setShowVideoHUD(true);
-              if (hudTimerRef.current) {
-                clearTimeout(hudTimerRef.current);
-                hudTimerRef.current = null;
-              }
+              playNextVideo();
             }}
           />
 
@@ -1044,7 +1139,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
             {/* Ligne 2: Aide mémoire touches PSP */}
             <div className="text-[8px] font-mono text-white/50 text-center">
-              ✕ Play/Pause • ◯ Quitter • ◄/► ±5s
+              [L/R] Vidéo Préc./Suiv. • ✕ Play/Pause • ◯ Quitter • ◄/► ±5s
             </div>
           </div>
         </div>
@@ -1114,7 +1209,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
             </div>
             {/* Barre de commandes officielle unique et discrète */}
             <div className="text-[8px] font-mono text-white/60 text-center mt-1 tracking-wider">
-              ✕ Pause • ◯ Retour • SELECT Visualiseur
+              [L/R] Piste Préc./Suiv. • ✕ Pause • ◯ Retour • SELECT Visualiseur
             </div>
           </div>
         </div>
@@ -1407,7 +1502,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                           e.stopPropagation();
                           setSubItemIndex(idx);
                           stateRef.current.subItemIndex = idx;
-                          playTrack(track);
+                          playTrack(track, currentSubList);
                           pushState('player');
                         }}
                         className={`h-12 flex items-center px-3 gap-2.5 rounded-lg cursor-pointer transition-all duration-200 ${
