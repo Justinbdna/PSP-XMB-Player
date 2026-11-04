@@ -23,7 +23,7 @@ interface AudioContextType {
   pauseTrack: () => void;
   togglePlay: () => void;
   seekRelative: (deltaSeconds: number) => void;
-  setVolume: (val: number) => void;
+  setVolume: (val: number, showOSD?: boolean) => void;
   adjustVolume: (delta: number) => void;
 }
 
@@ -559,7 +559,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setCurrentTime(nextTime);
   };
 
-  const setVolume = (val: number) => {
+  const setVolume = (val: number, showOSD: boolean = true) => {
     const clamped = Math.max(0, Math.min(1, Math.round(val * 100) / 100));
     volumeRef.current = clamped;
     setVolumeState(clamped);
@@ -573,7 +573,12 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         localAudioRef.current.muted = false;
       }
     }
-    triggerVolumeOSD();
+    if (showOSD) {
+      triggerVolumeOSD();
+    } else {
+      setShowVolumeOSD(false);
+      if (osdTimerRef.current) clearTimeout(osdTimerRef.current);
+    }
   };
 
   const adjustVolume = (delta: number) => {

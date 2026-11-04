@@ -65,22 +65,31 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
     };
   }, []);
 
-  // Réglage du volume par pas de 5 % (0.05)
+  // Réglage du volume par pas de 5 % (0.05) avec échelle fluide continue (0.0 à 1.0)
   const adjustTrackVolume = useCallback((trackIdx: number, delta: number) => {
     sound.playTick();
     if (trackIdx === 0) {
-      const nextMaster = Math.max(0, Math.min(1, Math.round((masterRef.current + delta) * 20) / 20));
-      setMasterVolume(nextMaster);
-      setEngineVolume(Math.round(nextMaster * bgmRef.current * 100) / 100);
-      sound.setVolume(Math.round(nextMaster * sfxRef.current * 100) / 100);
+      setMasterVolume((prev) => {
+        const next = Math.max(0, Math.min(1, Math.round((prev + delta) * 20) / 20));
+        masterRef.current = next;
+        setEngineVolume(Math.round(next * bgmRef.current * 100) / 100, false);
+        sound.setVolume(Math.round(next * sfxRef.current * 100) / 100);
+        return next;
+      });
     } else if (trackIdx === 1) {
-      const nextBgm = Math.max(0, Math.min(1, Math.round((bgmRef.current + delta) * 20) / 20));
-      setBgmVolume(nextBgm);
-      setEngineVolume(Math.round(masterRef.current * nextBgm * 100) / 100);
+      setBgmVolume((prev) => {
+        const next = Math.max(0, Math.min(1, Math.round((prev + delta) * 20) / 20));
+        bgmRef.current = next;
+        setEngineVolume(Math.round(masterRef.current * next * 100) / 100, false);
+        return next;
+      });
     } else if (trackIdx === 2) {
-      const nextSfx = Math.max(0, Math.min(1, Math.round((sfxRef.current + delta) * 20) / 20));
-      setSfxVolume(nextSfx);
-      sound.setVolume(Math.round(masterRef.current * nextSfx * 100) / 100);
+      setSfxVolume((prev) => {
+        const next = Math.max(0, Math.min(1, Math.round((prev + delta) * 20) / 20));
+        sfxRef.current = next;
+        sound.setVolume(Math.round(masterRef.current * next * 100) / 100);
+        return next;
+      });
     }
   }, [setEngineVolume]);
 
@@ -89,18 +98,21 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
     const rect = gaugeElement.getBoundingClientRect();
     if (rect.width <= 0) return;
     const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    const snapped = Math.round(ratio * 20) / 20; // Pas de 5 %
+    const snapped = Math.max(0, Math.min(1, Math.round(ratio * 20) / 20)); // Pas de 5 %
     setSelectedTrack(trackIdx);
     sound.playTick();
     if (trackIdx === 0) {
       setMasterVolume(snapped);
-      setEngineVolume(Math.round(snapped * bgmRef.current * 100) / 100);
+      masterRef.current = snapped;
+      setEngineVolume(Math.round(snapped * bgmRef.current * 100) / 100, false);
       sound.setVolume(Math.round(snapped * sfxRef.current * 100) / 100);
     } else if (trackIdx === 1) {
       setBgmVolume(snapped);
-      setEngineVolume(Math.round(masterRef.current * snapped * 100) / 100);
+      bgmRef.current = snapped;
+      setEngineVolume(Math.round(masterRef.current * snapped * 100) / 100, false);
     } else if (trackIdx === 2) {
       setSfxVolume(snapped);
+      sfxRef.current = snapped;
       sound.setVolume(Math.round(masterRef.current * snapped * 100) / 100);
     }
   }, [setEngineVolume]);
@@ -768,26 +780,26 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
         [Trackpad] Déplacer • [Clic / ✕] Lancer • [SELECT] Mixeur • [◯] Quitter
       </div>
 
-      {/* Overlay Rétro Mixeur Multipiste - Glassmorphism Sobre Sony XMB */}
+      {/* Overlay Rétro Mixeur Multipiste - Format Panoramique Glassmorphism Sobre */}
       {isMixerOpen && (
         <div
-          className="absolute inset-0 z-30 flex items-center justify-center bg-black/60 backdrop-blur-md animate-fade-in p-4"
+          className="absolute inset-0 z-30 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in p-4"
           onClick={() => {
             setIsMixerOpen(false);
             sound.playBack();
           }}
         >
           <div
-            className="bg-zinc-950/80 backdrop-blur-2xl border border-white/10 rounded-2xl p-6 w-80 shadow-2xl text-white select-none"
+            className="w-[370px] sm:w-[390px] py-3.5 px-5 bg-black/50 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl text-white select-none"
             onClick={(e) => e.stopPropagation()}
           >
             {/* En-tête sobre */}
-            <div className="mb-4">
+            <div className="mb-2.5">
               <h3 className="text-sm font-medium tracking-wide text-white/90">Mixeur audio</h3>
             </div>
 
             {/* Pistes et curseurs épurés */}
-            <div className="space-y-2">
+            <div className="space-y-1">
               {TRACKS.map((t, idx) => {
                 const isSelected = selectedTrack === idx;
                 const val = idx === 0 ? masterVolume : idx === 1 ? bgmVolume : sfxVolume;
@@ -798,22 +810,18 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
                       setSelectedTrack(idx);
                       sound.playTick();
                     }}
-                    className={`px-3 py-2 rounded-xl transition-all border ${
+                    className={`flex items-center transition-all ${
                       isSelected
-                        ? 'bg-white/5 border-white/10 text-white shadow-sm'
-                        : 'border-transparent text-white/70 hover:bg-white/[0.02]'
+                        ? 'bg-white/5 rounded-lg py-1 px-2 border border-white/5 text-white'
+                        : 'py-1 px-2 border border-transparent text-white/70 hover:bg-white/[0.02]'
                     }`}
                   >
-                    <div className="flex justify-between items-center mb-1.5">
-                      <span className={`text-xs ${isSelected ? 'text-white font-medium' : 'text-white/70'}`}>
-                        {t.label}
-                      </span>
-                      <span className="text-xs font-mono text-white/60 w-9 text-right">
-                        {Math.round(val * 100)}%
-                      </span>
-                    </div>
+                    {/* Libellé : text-xs text-white/70 w-16 */}
+                    <span className={`text-xs w-16 truncate ${isSelected ? 'text-white font-medium' : 'text-white/70'}`}>
+                      {t.label}
+                    </span>
 
-                    {/* Jauge horizontale fine avec réglage direct clic / glisser */}
+                    {/* Jauge : h-1 bg-white/15 rounded-full overflow-hidden flex-1 cursor-pointer mx-3 */}
                     <div
                       onPointerDown={(e) => {
                         e.stopPropagation();
@@ -826,23 +834,27 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
                           setTrackVolumeDirect(idx, e.clientX, e.currentTarget);
                         }
                       }}
-                      className="relative h-1.5 bg-white/15 rounded-full overflow-hidden cursor-pointer"
+                      className="relative h-1 bg-white/15 rounded-full overflow-hidden flex-1 cursor-pointer mx-3"
                     >
                       <div
-                        className="h-full bg-white/90 rounded-full transition-all duration-75 shadow-[0_0_8px_rgba(255,255,255,0.35)]"
+                        className="h-full bg-white/90 rounded-full transition-all duration-75 shadow-[0_0_6px_rgba(255,255,255,0.4)]"
                         style={{ width: `${Math.round(val * 100)}%` }}
                       />
                     </div>
+
+                    {/* Pourcentage : text-xs font-mono text-white/60 w-8 text-right */}
+                    <span className="text-xs font-mono text-white/60 w-8 text-right">
+                      {Math.round(val * 100)}%
+                    </span>
                   </div>
                 );
               })}
             </div>
 
-            {/* Légende de contrôle sobre */}
-            <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-[9px] text-white/40 tracking-wide font-mono">
-              <span>▲▼ Canal • ◄► Régler</span>
-              <span>[SELECT / START / ◯] Fermer</span>
-            </div>
+            {/* Pied de fenêtre minimaliste sur une seule ligne */}
+            <p className="text-[10px] text-white/40 tracking-wider font-mono text-center pt-2 mt-2 border-t border-white/5">
+              ▲/▼ Piste • ◄/► Volume • [◯ / SELECT] Fermer
+            </p>
           </div>
         </div>
       )}
