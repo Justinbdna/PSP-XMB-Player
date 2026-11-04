@@ -2,10 +2,17 @@ import React, { useEffect, useRef } from 'react';
 
 interface AudioVisualizerProps {
   isPlaying: boolean;
+  isYouTube?: boolean;
+  bpm?: number;
   className?: string;
 }
 
-export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isPlaying, className = '' }) => {
+export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
+  isPlaying,
+  isYouTube = false,
+  bpm = 120,
+  className = '',
+}) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -31,13 +38,25 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isPlaying, cla
       for (let i = 0; i < barCount; i++) {
         let targetHeight = 4;
         if (isPlaying) {
-          // Multi-harmonic procedural audio spectrum simulation
-          const harmonic1 = Math.sin(t * 1.8 + i * 0.45);
-          const harmonic2 = Math.cos(t * 2.6 - i * 0.3);
-          const harmonic3 = Math.sin(t * 4.2 + i * 0.8) * 0.5;
-          const bassBoost = i < 8 ? (8 - i) * 2.5 : 0;
-          const raw = (harmonic1 + harmonic2 + harmonic3 + 2.5) / 5;
-          targetHeight = Math.max(5, raw * (height - 8) + bassBoost);
+          if (isYouTube) {
+            // Animation procédurale calée sur le BPM pour flux YouTube
+            const tempo = bpm || 120;
+            const beatFreq = (tempo / 60) * 0.75;
+            const beatPulse = Math.pow(Math.max(0, Math.sin(t * beatFreq * Math.PI)), 2);
+            const harmonic = Math.sin(t * 2.4 + i * 0.35);
+            const bass = i < 7 ? beatPulse * 18 : 0;
+            const mid = i >= 7 && i < 18 ? Math.sin(t * 3.8 + i * 0.5) * 6 : 0;
+            const raw = (harmonic + 1) / 2;
+            targetHeight = Math.max(5, raw * (height - 12) + bass + mid);
+          } else {
+            // Multi-harmonic procedural audio spectrum simulation
+            const harmonic1 = Math.sin(t * 1.8 + i * 0.45);
+            const harmonic2 = Math.cos(t * 2.6 - i * 0.3);
+            const harmonic3 = Math.sin(t * 4.2 + i * 0.8) * 0.5;
+            const bassBoost = i < 8 ? (8 - i) * 2.5 : 0;
+            const raw = (harmonic1 + harmonic2 + harmonic3 + 2.5) / 5;
+            targetHeight = Math.max(5, raw * (height - 8) + bassBoost);
+          }
         }
 
         // Smooth interpolation
@@ -73,7 +92,7 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isPlaying, cla
 
     animId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animId);
-  }, [isPlaying]);
+  }, [isPlaying, isYouTube, bpm]);
 
   return (
     <canvas

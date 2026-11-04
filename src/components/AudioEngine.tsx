@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, createContext, useContext } from 'react';
 import { Track } from '../types/xmb';
 import { saveTrackToHistory } from '../services/itunes';
+import { YouTubeAudioBridge, YouTubeAudioBridgeHandle } from './YouTubeAudioBridge';
 
 interface AudioContextType {
   currentTrack: Track | null;
@@ -9,6 +10,7 @@ interface AudioContextType {
   duration: number;
   volume: number;
   showVolumeOSD: boolean;
+  isYouTubeActive: boolean;
   playTrack: (track: Track) => void;
   pauseTrack: () => void;
   togglePlay: () => void;
@@ -29,10 +31,12 @@ export const useAudio = () => {
 
 export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const ytBridgeRef = useRef<YouTubeAudioBridgeHandle | null>(null);
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [isYouTubeActive, setIsYouTubeActive] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
-  const [duration, setDuration] = useState<number>(30);
+  const [duration, setDuration] = useState<number>(90);
   const [volume, setVolumeState] = useState<number>(0.85);
   const [showVolumeOSD, setShowVolumeOSD] = useState<boolean>(false);
   const osdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -43,21 +47,29 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     audioRef.current = audio;
 
     const onTimeUpdate = () => {
-      setCurrentTime(audio.currentTime);
-      if (audio.duration && !isNaN(audio.duration)) {
-        setDuration(audio.duration);
+      if (!isYouTubeActive) {
+        setCurrentTime(audio.currentTime);
+        if (audio.duration && !isNaN(audio.duration)) {
+          setDuration(audio.duration);
+        }
       }
     };
 
-    const onPlay = () => setIsPlaying(true);
-    const onPause = () => setIsPlaying(false);
+    const onPlay = () => {
+      if (!isYouTubeActive) setIsPlaying(true);
+    };
+    const onPause = () => {
+      if (!isYouTubeActive) setIsPlaying(false);
+    };
     const onEnded = () => {
-      setIsPlaying(false);
-      setCurrentTime(0);
+      if (!isYouTubeActive) {
+        setIsPlaying(false);
+        setCurrentTime(0);
+      }
     };
     const onError = (e: Event) => {
       console.warn('Audio playback error:', e);
-      setIsPlaying(false);
+      if (!isYouTubeActive) setIsPlaying(false);
     };
 
     audio.addEventListener('timeupdate', onTimeUpdate);
@@ -75,7 +87,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       audio.pause();
       audio.src = '';
     };
-  }, []);
+  }, [isYouTubeActive]);
 
   const triggerVolumeOSD = () => {
     setShowVolumeOSD(true);
@@ -86,46 +98,73 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const playTrack = (track: Track) => {
-    if (!audioRef.current) return;
     saveTrackToHistory(track);
-
-    if (currentTrack?.id === track.id) {
-      if (audioRef.current.paused) {
-        audioRef.current.play().catch((err) => console.warn('Play prevented:', err));
-      }
-      return;
-    }
-
     setCurrentTrack(track);
-    audioRef.current.src = track.previewUrl;
-    audioRef.current.currentTime = 0;
-    audioRef.current.play().catch((err) => {
-      console.warn('Playback error on track:', track.title, err);
-      setIsPlaying(false);
-    });
+
+    if (track.youtubeId) {
+      // Bascule vers le Headless YouTube Audio Bridge
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+      }
+      setIsYouTubeActive(true);
+      setIsPlaying(true);
+      setCurrentTime(0);
+      setDuration(track.durationMs ? track.durationMs / 1000 : 90);
+      ytBridgeRef.current?.play(track.youtubeId);
+      ytBridgeRef.current?.setVolume(volume);
+    } else {
+      // Bascule vers le moteur audio HTML5 classique
+      setIsYouTubeActive(false);
+      ytBridgeRef.current?.pause();
+
+      if (!audioRef.current) return;
+      audioRef.current.src = track.previewUrl;
+      audioRef.current.currentTime = 0;
+      audioRef.current.play().catch((err) => {
+        console.warn('Playback error on track:', track.title, err);
+        setIsPlaying(false);
+      });
+    }
   };
 
   const pauseTrack = () => {
-    if (audioRef.current) {
+    if (isYouTubeActive) {
+      ytBridgeRef.current?.pause();
+      setIsPlaying(false);
+    } else if (audioRef.current) {
       audioRef.current.pause();
+      setIsPlaying(false);
     }
   };
 
   const togglePlay = () => {
-    if (!audioRef.current) return;
     if (!currentTrack) return;
-    if (isPlaying) {
-      pauseTrack();
-    } else {
-      audioRef.current.play().catch((err) => console.warn('Resume failed:', err));
+    if (isYouTubeActive) {
+      if (isPlaying) {
+        ytBridgeRef.current?.pause();
+        setIsPlaying(false);
+      } else {
+        ytBridgeRef.current?.resume();
+        setIsPlaying(true);
+      }
+    } else if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();
+      } else {
+        audioRef.current.play().catch((err) => console.warn('Resume failed:', err));
+      }
     }
   };
 
   const seekRelative = (deltaSeconds: number) => {
-    if (!audioRef.current) return;
-    const nextTime = Math.max(0, Math.min(duration, audioRef.current.currentTime + deltaSeconds));
-    audioRef.current.currentTime = nextTime;
-    setCurrentTime(nextTime);
+    if (isYouTubeActive) {
+      ytBridgeRef.current?.seekRelative(deltaSeconds);
+    } else if (audioRef.current) {
+      const nextTime = Math.max(0, Math.min(duration, audioRef.current.currentTime + deltaSeconds));
+      audioRef.current.currentTime = nextTime;
+      setCurrentTime(nextTime);
+    }
   };
 
   const setVolume = (val: number) => {
@@ -134,6 +173,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (audioRef.current) {
       audioRef.current.volume = clamped;
     }
+    ytBridgeRef.current?.setVolume(clamped);
     triggerVolumeOSD();
   };
 
@@ -143,6 +183,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (audioRef.current) {
         audioRef.current.volume = next;
       }
+      ytBridgeRef.current?.setVolume(next);
       return next;
     });
     triggerVolumeOSD();
@@ -157,6 +198,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         duration,
         volume,
         showVolumeOSD,
+        isYouTubeActive,
         playTrack,
         pauseTrack,
         togglePlay,
@@ -166,6 +208,28 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }}
     >
       {children}
+      <YouTubeAudioBridge
+        ref={ytBridgeRef}
+        onStateChange={(ytIsPlaying) => {
+          if (isYouTubeActive) {
+            setIsPlaying(ytIsPlaying);
+          }
+        }}
+        onTimeUpdate={(ytCurrent, ytDuration) => {
+          if (isYouTubeActive) {
+            setCurrentTime(ytCurrent);
+            if (ytDuration > 0) {
+              setDuration(ytDuration);
+            }
+          }
+        }}
+        onEnded={() => {
+          if (isYouTubeActive) {
+            setIsPlaying(false);
+            setCurrentTime(0);
+          }
+        }}
+      />
     </AudioContext.Provider>
   );
 };

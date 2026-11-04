@@ -50,6 +50,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     currentTime,
     duration,
     volume,
+    isYouTubeActive,
     playTrack,
     pauseTrack,
     togglePlay,
@@ -904,7 +905,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                   {isPlaying ? 'LECTURE' : 'EN PAUSE'}
                 </span>
                 <span className="text-[8px] font-mono text-white/40">
-                  AAC 256kbps • 44.1kHz
+                  {isYouTubeActive ? 'YOUTUBE AUDIO STREAM (90s / FULL)' : 'AAC 256kbps • 44.1kHz'}
                 </span>
               </div>
 
@@ -917,7 +918,11 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
               {/* Dynamic Rhythmic Spectrum Visualizer */}
               <div className="w-full bg-black/40 backdrop-blur-sm rounded-lg p-1 border border-white/10 shadow-inner">
-                <AudioVisualizer isPlaying={isPlaying} />
+                <AudioVisualizer
+                  isPlaying={isPlaying}
+                  isYouTube={isYouTubeActive}
+                  bpm={currentTrack.bpm || 120}
+                />
               </div>
             </div>
           </div>
@@ -1330,8 +1335,10 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                     <span className="text-white/80 truncate block">{currentTrack.artist}</span>
                   </div>
                   <div>
-                    <span className="text-white/40 block text-[7.5px] uppercase">Format</span>
-                    <span className="text-emerald-300 font-mono text-[8px]">AAC 256kbps • 44.1kHz</span>
+                    <span className="text-white/40 block text-[7.5px] uppercase">Format & Source</span>
+                    <span className="text-emerald-300 font-mono text-[8px]">
+                      {isYouTubeActive ? 'Passerelle YouTube Audio (Full/90s)' : 'AAC 256kbps • 44.1kHz (iTunes Store)'}
+                    </span>
                   </div>
                 </>
               ) : viewMode === 'video_player' && currentVideo ? (

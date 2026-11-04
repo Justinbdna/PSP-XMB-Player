@@ -23,11 +23,11 @@ export const SENSME_PLAYLISTS: Record<string, Track[]> = {
   ],
 };
 
-// Search tracks directly using Apple iTunes Search API (15 results limit)
+// Search tracks directly using Apple iTunes Search API (15 results limit with country=FR)
 export async function searchTracks(query: string): Promise<Track[]> {
   if (!query.trim()) return [];
   try {
-    const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&limit=15`;
+    const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&country=FR&limit=15`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`iTunes API error: ${res.status}`);
     const data = await res.json();
@@ -40,7 +40,8 @@ export async function searchTracks(query: string): Promise<Track[]> {
         album: item.collectionName || 'Single',
         previewUrl: item.previewUrl,
         artworkUrl: (item.artworkUrl100 || '').replace('100x100bb.jpg', '600x600bb.jpg'),
-        durationMs: item.trackTimeMillis,
+        durationMs: item.trackTimeMillis || 90000,
+        sourceType: 'itunes' as const,
       }));
   } catch (error) {
     console.error('Failed to search tracks from iTunes:', error);
