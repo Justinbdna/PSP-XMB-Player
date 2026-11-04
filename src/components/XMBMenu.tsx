@@ -22,8 +22,14 @@ interface NavigationFrame {
   catIndex: number;
   itemIndex: number;
   subItemIndex: number;
-  subListType?: 'ms' | 'itunes' | 'history' | 'search_results' | 'video' | 'game' | 'theme';
+  subListType?: 'ms' | 'itunes' | 'history' | 'search_results' | 'video' | 'game' | 'theme' | 'music';
 }
+
+const VISUALIZER_OPTIONS: { id: VisualizerMode; label: string }[] = [
+  { id: 'waveform', label: 'Neon Wave Oscilloscope' },
+  { id: 'matrix', label: 'LED Matrix Blocks' },
+  { id: 'bubbles', label: 'Underwater Bubbles' },
+];
 
 interface XMBMenuProps {
   currentTheme: PSPTheme;
@@ -71,7 +77,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   const [itemIndex, setItemIndex] = useState<number>(0);
   const [subItemIndex, setSubItemIndex] = useState<number>(0);
   const [subListType, setSubListType] = useState<
-    'ms' | 'itunes' | 'history' | 'search_results' | 'video' | 'game' | 'theme'
+    'ms' | 'itunes' | 'history' | 'search_results' | 'video' | 'game' | 'theme' | 'music'
   >('ms');
 
   // Video playback state
@@ -122,6 +128,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
   // Contextual options side panel (Touche Triangle △)
   const [isOptionsOpen, setIsOptionsOpen] = useState<boolean>(false);
+  const [optionVisualizerIndex, setOptionVisualizerIndex] = useState<number>(0);
 
   // Visualizer Mode State & Persistence (Chantier 1 & 2)
   const getSavedVisualizerMode = (): VisualizerMode => {
@@ -341,7 +348,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
   // Active sub-list audio tracks
   const currentSubList: Track[] = (() => {
-    if (subListType === 'ms') return localTracks;
+    if (subListType === 'ms' || subListType === 'music') return localTracks;
     if (subListType === 'itunes') return itunesTracks;
     if (subListType === 'history') return historyTracks;
     if (subListType === 'search_results') return searchResults;
@@ -379,6 +386,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     currentGame,
     officialThemesList,
     isOptionsOpen,
+    optionVisualizerIndex,
     isSearchModalOpen,
     currentTrack,
     visualizerMode,
@@ -403,6 +411,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       currentGame,
       officialThemesList,
       isOptionsOpen,
+      optionVisualizerIndex,
       isSearchModalOpen,
       currentTrack,
       visualizerMode,
@@ -430,7 +439,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   // Push current frame onto navigation state stack
   const pushState = (
     newView: XMBViewMode,
-    nextSubListType?: 'ms' | 'itunes' | 'history' | 'search_results' | 'video' | 'game' | 'theme'
+    nextSubListType?: 'ms' | 'itunes' | 'history' | 'search_results' | 'video' | 'game' | 'theme' | 'music'
   ) => {
     const current = stateRef.current;
     setNavStack((prev) => [
@@ -635,6 +644,16 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         setVideoAspectMode((prev) => (prev === 'contain' ? 'cover' : 'contain'));
         return;
       }
+      if (dir === 'up') {
+        sound.playTick();
+        setOptionVisualizerIndex((prev) => (prev > 0 ? prev - 1 : VISUALIZER_OPTIONS.length - 1));
+        return;
+      }
+      if (dir === 'down') {
+        sound.playTick();
+        setOptionVisualizerIndex((prev) => (prev < VISUALIZER_OPTIONS.length - 1 ? prev + 1 : 0));
+        return;
+      }
       if (dir === 'left' || dir === 'right') {
         setIsOptionsOpen(false);
       }
@@ -751,7 +770,12 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         setVideoAspectMode((prev) => (prev === 'contain' ? 'cover' : 'contain'));
         return;
       }
-      setIsOptionsOpen(false);
+      // Valider le visualiseur sélectionné au clavier sans fermer le panneau
+      const targetMode = VISUALIZER_OPTIONS[s.optionVisualizerIndex || 0];
+      if (targetMode) {
+        sound.playEnter();
+        setVisualizerMode(targetMode.id);
+      }
       return;
     }
 
@@ -813,7 +837,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       const selectedTrack = s.currentSubList[activeSubIndex];
       if (selectedTrack) {
         playTrack(selectedTrack, s.currentSubList);
-        pushState('player');
+        pushState('player', 'music');
       }
       return;
     }
@@ -823,15 +847,19 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     const currentItem = s.activeItems[activeItemIdx];
     if (!currentItem) return;
 
-    if (currentItem.type === 'folder') {
-      let targetType: 'ms' | 'itunes' | 'history' | 'video' | 'game' | 'theme' = 'ms';
+    if (currentItem.type === 'folder' || currentItem.id === 'music-ms') {
+      try { sound.playEnter(); } catch (e) {}
+      setSubItemIndex(0);
+      stateRef.current.subItemIndex = 0;
+      let targetType: 'ms' | 'itunes' | 'history' | 'search_results' | 'video' | 'game' | 'theme' | 'music' = 'ms';
       if (currentItem.id === 'music-ms') targetType = 'ms';
-      if (currentItem.id === 'music-itunes') targetType = 'itunes';
-      if (currentItem.id === 'theme-color') targetType = 'theme';
-      if (currentItem.id === 'history-list') targetType = 'history';
-      if (currentItem.id === 'video-ms') targetType = 'video';
-      if (currentItem.id === 'game-ms') targetType = 'game';
+      else if (currentItem.id === 'music-itunes') targetType = 'itunes';
+      else if (currentItem.id === 'theme-color') targetType = 'theme';
+      else if (currentItem.id === 'history-list') targetType = 'history';
+      else if (currentItem.id === 'video-ms') targetType = 'video';
+      else if (currentItem.id === 'game-ms') targetType = 'game';
       pushState('sublist', targetType);
+      return;
     } else if (currentItem.id === 'game-1' || currentItem.type === 'game') {
       const selectedGame = s.gamesList.find((g) => g.id === currentItem.id) || s.gamesList[0] || currentItem;
       launchRetroGame(selectedGame);
@@ -840,7 +868,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       setIsSearchModalOpen(true);
     } else if (currentItem.id === 'music-now') {
       if (currentTrack) {
-        pushState('player');
+        pushState('player', 'music');
       }
     } else if (currentItem.id === 'search-daft-punk') {
       executeSearch('Daft Punk');
@@ -865,7 +893,12 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     if (stateRef.current.viewMode === 'video_player') {
       triggerVideoHUD();
     }
-    setIsOptionsOpen((prev) => !prev);
+    const nextState = !stateRef.current.isOptionsOpen;
+    if (nextState) {
+      const currIdx = VISUALIZER_OPTIONS.findIndex((m) => m.id === stateRef.current.visualizerMode);
+      setOptionVisualizerIndex(currIdx >= 0 ? currIdx : 0);
+    }
+    setIsOptionsOpen(nextState);
   };
 
   // Touche Carré (▢ / Touche Espace) : Déclencher immédiatement la bascule Play / Pause
@@ -1704,160 +1737,171 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
       {/* 7. VOLET LATÉRAL D'OPTIONS CONTEXTUELLES (Touche Triangle △ / A) */}
       {isOptionsOpen && (
-        <div className="absolute top-0 right-0 bottom-0 w-48 bg-gradient-to-l from-black/95 via-black/90 to-black/60 backdrop-blur-md border-l border-white/20 p-3 z-40 flex flex-col justify-between animate-fade-in shadow-2xl">
+        <div className="absolute top-0 right-0 bottom-0 w-72 bg-zinc-950/75 backdrop-blur-2xl border-l border-white/10 p-5 flex flex-col justify-between text-white shadow-2xl z-40 select-none animate-fade-in">
           <div>
-            <div className="flex items-center justify-between border-b border-white/15 pb-1.5 mb-2.5">
-              <span className="text-[10px] font-bold tracking-wider text-emerald-400 flex items-center gap-1.5">
-                <PSGlyph type="triangle" size={10} />
-                OPTIONS
-              </span>
-              <button
-                onClick={() => setIsOptionsOpen(false)}
-                className="text-white/50 hover:text-white text-[10px] px-1 rounded bg-white/10"
-              >
-                ✕
-              </button>
-            </div>
+            <h3 className="text-xs font-semibold tracking-widest uppercase text-white/50 mb-4">
+              Options
+            </h3>
 
             {/* Context details */}
-            <div className="flex flex-col gap-2 text-[9px]">
+            <div className="flex flex-col gap-3.5 text-xs">
               {viewMode === 'player' && currentTrack ? (
                 <>
                   <div>
-                    <span className="text-white/40 block text-[7.5px] uppercase">Titre</span>
-                    <span className="font-semibold text-white truncate block">{currentTrack.title}</span>
+                    <span className="text-[10px] text-white/40 uppercase tracking-wider block font-mono mb-0.5">Titre</span>
+                    <span className="text-sm font-medium text-white truncate block">{currentTrack.title}</span>
                   </div>
                   <div>
-                    <span className="text-white/40 block text-[7.5px] uppercase">Artiste</span>
-                    <span className="text-white/80 truncate block">{currentTrack.artist}</span>
+                    <span className="text-[10px] text-white/40 uppercase tracking-wider block font-mono mb-0.5">Artiste</span>
+                    <span className="text-xs text-white/80 truncate block">{currentTrack.artist}</span>
                   </div>
                   <div>
-                    <span className="text-white/40 block text-[7.5px] uppercase">Format</span>
-                    <span className="text-emerald-300 font-mono text-[8px]">AAC 256kbps • 44.1kHz</span>
+                    <span className="text-[10px] text-white/40 uppercase tracking-wider block font-mono mb-1">Format / Échantillonnage</span>
+                    <span className="inline-block px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-[10px] font-mono text-emerald-400">
+                      AAC • 256kbps • 44.1kHz
+                    </span>
                   </div>
                   <div>
-                    <span className="text-white/40 block text-[7.5px] uppercase mb-1">Visualiseur Audio</span>
-                    <div className="flex flex-col gap-1">
-                      {[
-                        { id: 'bubbles', label: 'Underwater Bubbles' },
-                        { id: 'matrix', label: 'LED Matrix Blocks' },
-                        { id: 'waveform', label: 'Neon Wave Oscilloscope' },
-                      ].map((m) => {
+                    <span className="text-[10px] text-white/40 uppercase tracking-wider block font-mono mb-2">Visualiseur Audio</span>
+                    <div className="flex flex-col gap-1.5">
+                      {VISUALIZER_OPTIONS.map((m, idx) => {
                         const isActive = visualizerMode === m.id;
+                        const isFocused = optionVisualizerIndex === idx;
                         return (
                           <button
                             key={m.id}
                             onClick={() => {
                               sound.playEnter();
-                              setVisualizerMode(m.id as VisualizerMode);
+                              setVisualizerMode(m.id);
+                              setOptionVisualizerIndex(idx);
                             }}
-                            className={`flex items-center justify-between px-2 py-1 rounded text-[8px] font-medium transition-all ${
+                            className={`transition-all ${
                               isActive
-                                ? 'bg-cyan-500/30 text-cyan-200 border border-cyan-400/50 shadow-[0_0_8px_rgba(6,182,212,0.3)]'
-                                : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white border border-transparent'
+                                ? 'text-xs text-white bg-white/15 border border-white/20 font-medium rounded-xl px-3 py-2 flex items-center justify-between'
+                                : isFocused
+                                ? 'text-xs text-white bg-white/10 border border-white/15 rounded-xl px-3 py-2 flex items-center justify-between'
+                                : 'text-xs text-white/60 bg-white/5 hover:bg-white/10 rounded-xl px-3 py-2 transition-all flex items-center justify-between'
                             }`}
                           >
                             <span>{m.label}</span>
-                            {isActive && <span className="text-cyan-400 text-[9px]">●</span>}
+                            {isActive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]" />}
                           </button>
                         );
                       })}
                     </div>
-                    <span className="text-[7px] text-white/40 mt-1 block font-mono">
-                      Touche SELECT pour cycler à la volée
-                    </span>
                   </div>
                 </>
               ) : viewMode === 'video_player' && currentVideo ? (
                 <>
                   <div>
-                    <span className="text-white/40 block text-[7.5px] uppercase">Clip Vidéo</span>
-                    <span className="font-semibold text-white truncate block">{currentVideo.title}</span>
+                    <span className="text-[10px] text-white/40 uppercase tracking-wider block font-mono mb-0.5">Clip Vidéo</span>
+                    <span className="text-sm font-medium text-white truncate block">{currentVideo.title}</span>
                   </div>
                   <div>
-                    <span className="text-white/40 block text-[7.5px] uppercase mb-1">Format écran</span>
+                    <span className="text-[10px] text-white/40 uppercase tracking-wider block font-mono mb-1.5">Format écran</span>
                     <div
                       onClick={() => {
                         sound.playEnter();
                         setVideoAspectMode((prev) => (prev === 'contain' ? 'cover' : 'contain'));
                       }}
-                      className="flex items-center gap-1 p-1 rounded bg-white/10 hover:bg-white/15 cursor-pointer border border-white/15 transition-all"
+                      className="flex items-center gap-1.5 p-1 rounded-xl bg-white/5 border border-white/10 cursor-pointer transition-all"
                     >
                       <span
-                        className={`flex-1 text-center py-0.5 rounded text-[8px] font-bold transition-all ${
+                        className={`flex-1 text-center py-1 rounded-lg text-[10px] font-medium transition-all ${
                           videoAspectMode === 'contain'
-                            ? 'bg-cyan-400 text-black shadow'
+                            ? 'bg-white/20 text-white font-semibold shadow'
                             : 'text-white/60 hover:text-white'
                         }`}
                       >
                         Normal (4:3 / 16:9)
                       </span>
                       <span
-                        className={`flex-1 text-center py-0.5 rounded text-[8px] font-bold transition-all ${
+                        className={`flex-1 text-center py-1 rounded-lg text-[10px] font-medium transition-all ${
                           videoAspectMode === 'cover'
-                            ? 'bg-cyan-400 text-black shadow'
+                            ? 'bg-white/20 text-white font-semibold shadow'
                             : 'text-white/60 hover:text-white'
                         }`}
                       >
                         Plein écran (Zoom)
                       </span>
                     </div>
-                    <span className="text-[7px] text-white/40 mt-1 block font-mono">
-                      ✕ ou ◄/► pour alterner
-                    </span>
                   </div>
                   <div>
-                    <span className="text-white/40 block text-[7.5px] uppercase">Rendu actif</span>
-                    <span className="text-cyan-300 font-mono text-[8px]">
+                    <span className="text-[10px] text-white/40 uppercase tracking-wider block font-mono mb-0.5">Rendu actif</span>
+                    <span className="text-cyan-300 font-mono text-[11px]">
                       {videoAspectMode === 'contain' ? 'Pillarbox Original' : 'Zoom Étendu 16:9'}
                     </span>
                   </div>
-                  <div>
-                    <span className="text-white/40 block text-[7.5px] uppercase">Résolution</span>
-                    <span className="text-white/70 font-mono text-[8px]">480 × 272 (LCD PSP)</span>
-                  </div>
                 </>
-              ) : viewMode === 'game_screen' && currentGame ? (
+              ) : currentTrack ? (
                 <>
                   <div>
-                    <span className="text-white/40 block text-[7.5px] uppercase">Jeu UMD</span>
-                    <span className="font-semibold text-white truncate block">{currentGame.title}</span>
+                    <span className="text-[10px] text-white/40 uppercase tracking-wider block font-mono mb-0.5">Lecture en cours</span>
+                    <span className="text-sm font-medium text-white truncate block">{currentTrack.title}</span>
+                    <span className="text-xs text-white/70 truncate block">{currentTrack.artist}</span>
                   </div>
                   <div>
-                    <span className="text-white/40 block text-[7.5px] uppercase">Éditeur</span>
-                    <span className="text-emerald-300 text-[8px]">{currentGame.publisher || 'SCE'}</span>
+                    <span className="text-[10px] text-white/40 uppercase tracking-wider block font-mono mb-1">Format / Échantillonnage</span>
+                    <span className="inline-block px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-[10px] font-mono text-emerald-400">
+                      AAC • 256kbps • 44.1kHz
+                    </span>
                   </div>
                   <div>
-                    <span className="text-white/40 block text-[7.5px] uppercase">Genre / Taille</span>
-                    <span className="text-white/70 font-mono text-[8px]">{currentGame.genre} • {currentGame.size}</span>
+                    <span className="text-[10px] text-white/40 uppercase tracking-wider block font-mono mb-2">Visualiseur Audio</span>
+                    <div className="flex flex-col gap-1.5">
+                      {VISUALIZER_OPTIONS.map((m, idx) => {
+                        const isActive = visualizerMode === m.id;
+                        const isFocused = optionVisualizerIndex === idx;
+                        return (
+                          <button
+                            key={m.id}
+                            onClick={() => {
+                              sound.playEnter();
+                              setVisualizerMode(m.id);
+                              setOptionVisualizerIndex(idx);
+                            }}
+                            className={`transition-all ${
+                              isActive
+                                ? 'text-xs text-white bg-white/15 border border-white/20 font-medium rounded-xl px-3 py-2 flex items-center justify-between'
+                                : isFocused
+                                ? 'text-xs text-white bg-white/10 border border-white/15 rounded-xl px-3 py-2 flex items-center justify-between'
+                                : 'text-xs text-white/60 bg-white/5 hover:bg-white/10 rounded-xl px-3 py-2 transition-all flex items-center justify-between'
+                            }`}
+                          >
+                            <span>{m.label}</span>
+                            {isActive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]" />}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </>
               ) : (
                 <>
                   <div>
-                    <span className="text-white/40 block text-[7.5px] uppercase">Système</span>
-                    <span className="font-semibold text-white block">Sony PSP Street</span>
+                    <span className="text-[10px] text-white/40 uppercase tracking-wider block font-mono mb-0.5">Système</span>
+                    <span className="text-sm font-medium text-white block">Sony PSP Street</span>
                   </div>
                   <div>
-                    <span className="text-white/40 block text-[7.5px] uppercase">Firmware</span>
-                    <span className="text-white/70 font-mono text-[8px]">v6.61 (Authentique)</span>
+                    <span className="text-[10px] text-white/40 uppercase tracking-wider block font-mono mb-0.5">Firmware</span>
+                    <span className="text-white/70 font-mono text-xs">v6.61 (Authentique)</span>
                   </div>
                   <div>
-                    <span className="text-white/40 block text-[7.5px] uppercase">Catégorie active</span>
-                    <span className="text-white/80 block">{activeCategory.name}</span>
+                    <span className="text-[10px] text-white/40 uppercase tracking-wider block font-mono mb-0.5">Catégorie active</span>
+                    <span className="text-white/80 text-xs block">{activeCategory.name}</span>
                   </div>
                   <div>
-                    <span className="text-white/40 block text-[7.5px] uppercase">Volume principal</span>
-                    <span className="text-white/70 font-mono text-[8px]">{Math.round(volume * 30)} / 30</span>
+                    <span className="text-[10px] text-white/40 uppercase tracking-wider block font-mono mb-0.5">Volume principal</span>
+                    <span className="text-emerald-400 font-mono text-xs">{Math.round(volume * 30)} / 30</span>
                   </div>
                 </>
               )}
             </div>
           </div>
 
-          <div className="pt-2 border-t border-white/10 text-[7.5px] text-white/40 font-mono">
-            △ ou ◯ pour fermer
-          </div>
+          <p className="text-[10px] text-white/40 tracking-wider font-mono text-center pt-3 border-t border-white/5">
+            [△ / ◯] Fermer • [✕] Sélectionner
+          </p>
         </div>
       )}
 

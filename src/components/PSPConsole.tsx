@@ -410,24 +410,18 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
       </div>
 
       {/* SHORTCUTS & ACCESSIBILITY BAR */}
-      <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-xs text-white/50 bg-white/[0.03] border border-white/10 px-5 py-2 rounded-full">
-        <span>🎮 <b className="text-white/80">Manette connectée</b> (auto-détection)</span>
+      <div className="max-w-4xl mx-auto mt-4 px-5 py-2 bg-black/40 hover:bg-black/70 backdrop-blur-xl border border-white/5 hover:border-white/10 rounded-full transition-all duration-300 opacity-40 hover:opacity-100 flex items-center justify-center gap-3 text-[11px] font-mono text-white/60 select-none">
+        <span>🎮 D-Pad / Flèches : Naviguer</span>
         <span>•</span>
-        <span>⌨️ <b className="text-white/80">Flèches</b> : Naviguer</span>
+        <span>✕ : Valider</span>
         <span>•</span>
-        <span><b className="text-cyan-400">L / R (Q / E)</b> : Précédent / Suivant</span>
+        <span>◯ : Retour</span>
         <span>•</span>
-        <span><b className="text-blue-400">X / Entrée</b> : Valider / Lecture</span>
+        <span>□ : Play/Pause</span>
         <span>•</span>
-        <span><b className="text-red-400">O / Échap</b> : Retour</span>
+        <span>△ : Options</span>
         <span>•</span>
-        <span><b className="text-pink-400">▢ / Espace</b> : Play / Pause</span>
-        <span>•</span>
-        <span><b className="text-emerald-400">△ / T</b> : Options</span>
-        <span>•</span>
-        <span><b className="text-amber-400">SELECT / Tab</b> : Visualiseur</span>
-        <span>•</span>
-        <span><b className="text-white/80">H</b> : PS Home</span>
+        <span>SELECT : Mixeur</span>
       </div>
     </div>
   );
