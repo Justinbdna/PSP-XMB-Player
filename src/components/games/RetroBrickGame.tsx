@@ -38,24 +38,24 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
   externalCommand,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const { volume: engineVolume, setVolume: setEngineVolume } = useAudio();
+  const { setVolume: setEngineVolume } = useAudio();
 
-  // Niveaux de volume indépendants (Master, BGM, SFX)
-  const [masterVolume, setMasterVolume] = useState<number>(1.0);
-  const [bgmVolume, setBgmVolume] = useState<number>(() => (typeof engineVolume === 'number' ? engineVolume : 0.8));
-  const [sfxVolume, setSfxVolume] = useState<number>(1.0);
+  // Niveaux de volume indépendants unifiés de 0 à 100 (Chantier 1)
+  const [masterVol, setMasterVol] = useState<number>(100); // 0 à 100
+  const [bgmVol, setBgmVol] = useState<number>(85);        // 0 à 100
+  const [sfxVol, setSfxVol] = useState<number>(100);       // 0 à 100
   const [isMixerOpen, setIsMixerOpen] = useState<boolean>(false);
-  const [selectedTrack, setSelectedTrack] = useState<number>(0); // 0: Master, 1: BGM, 2: SFX
+  const [selectedTrack, setSelectedTrack] = useState<number>(0); // 0: Général, 1: Musique, 2: Bruitages
 
-  const masterRef = useRef(masterVolume);
-  masterRef.current = masterVolume;
-  const bgmRef = useRef(bgmVolume);
-  bgmRef.current = bgmVolume;
-  const sfxRef = useRef(sfxVolume);
-  sfxRef.current = sfxVolume;
-  const isMixerOpenRef = useRef(isMixerOpen);
+  const masterVolRef = useRef<number>(100);
+  masterVolRef.current = masterVol;
+  const bgmVolRef = useRef<number>(85);
+  bgmVolRef.current = bgmVol;
+  const sfxVolRef = useRef<number>(100);
+  sfxVolRef.current = sfxVol;
+  const isMixerOpenRef = useRef<boolean>(isMixerOpen);
   isMixerOpenRef.current = isMixerOpen;
-  const selectedTrackRef = useRef(selectedTrack);
+  const selectedTrackRef = useRef<number>(selectedTrack);
   selectedTrackRef.current = selectedTrack;
 
   // Réinitialisation du volume des bruitages à la sortie
@@ -65,57 +65,86 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
     };
   }, []);
 
-  // Réglage du volume par pas de 5 % (0.05) avec échelle fluide continue (0.0 à 1.0)
-  const adjustTrackVolume = useCallback((trackIdx: number, delta: number) => {
-    sound.playTick();
-    if (trackIdx === 0) {
-      setMasterVolume((prev) => {
-        const next = Math.max(0, Math.min(1, Math.round((prev + delta) * 20) / 20));
-        masterRef.current = next;
-        setEngineVolume(Math.round(next * bgmRef.current * 100) / 100, false);
-        sound.setVolume(Math.round(next * sfxRef.current * 100) / 100);
-        return next;
-      });
-    } else if (trackIdx === 1) {
-      setBgmVolume((prev) => {
-        const next = Math.max(0, Math.min(1, Math.round((prev + delta) * 20) / 20));
-        bgmRef.current = next;
-        setEngineVolume(Math.round(masterRef.current * next * 100) / 100, false);
-        return next;
-      });
-    } else if (trackIdx === 2) {
-      setSfxVolume((prev) => {
-        const next = Math.max(0, Math.min(1, Math.round((prev + delta) * 20) / 20));
-        sfxRef.current = next;
-        sound.setVolume(Math.round(masterRef.current * next * 100) / 100);
-        return next;
-      });
-    }
-  }, [setEngineVolume]);
+  // Transmission décimale propre vers Web Audio (0.0 à 1.0)
+  const applyAudioVolumes = useCallback(
+    (m: number, b: number, s: number) => {
+      const effectiveBgm = (m / 100) * (b / 100); // valeur entre 0.0 et 1.0
+      const effectiveSfx = (m / 100) * (s / 100); // valeur entre 0.0 et 1.0
 
-  // Réglage direct du volume (clic ou glisser du pointeur sur la jauge)
-  const setTrackVolumeDirect = useCallback((trackIdx: number, clientX: number, gaugeElement: HTMLElement) => {
-    const rect = gaugeElement.getBoundingClientRect();
-    if (rect.width <= 0) return;
-    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    const snapped = Math.max(0, Math.min(1, Math.round(ratio * 20) / 20)); // Pas de 5 %
-    setSelectedTrack(trackIdx);
+      // Met à jour la musique sans déclencher l'OSD global de la console
+      setEngineVolume(effectiveBgm, false);
+
+      // Met à jour les bruitages de rebond
+      try {
+        sound.setVolume(effectiveSfx);
+      } catch (e) {}
+    },
+    [setEngineVolume]
+  );
+
+  // Fonction de mise à jour unifiée par pas de 5 % (+5 ou -5)
+  const stepChannelVolume = useCallback(
+    (channelIndex: number, delta: number) => {
+      sound.playTick();
+      if (channelIndex === 0) {
+        setMasterVol((prev) => {
+          const next = Math.max(0, Math.min(100, prev + delta));
+          masterVolRef.current = next;
+          applyAudioVolumes(next, bgmVolRef.current, sfxVolRef.current);
+          return next;
+        });
+      } else if (channelIndex === 1) {
+        setBgmVol((prev) => {
+          const next = Math.max(0, Math.min(100, prev + delta));
+          bgmVolRef.current = next;
+          applyAudioVolumes(masterVolRef.current, next, sfxVolRef.current);
+          return next;
+        });
+      } else if (channelIndex === 2) {
+        setSfxVol((prev) => {
+          const next = Math.max(0, Math.min(100, prev + delta));
+          sfxVolRef.current = next;
+          applyAudioVolumes(masterVolRef.current, bgmVolRef.current, next);
+          return next;
+        });
+      }
+    },
+    [applyAudioVolumes]
+  );
+
+  // Sélection rapide d'une piste
+  const selectTrack = useCallback((idx: number) => {
+    selectedTrackRef.current = idx;
+    setSelectedTrack(idx);
     sound.playTick();
-    if (trackIdx === 0) {
-      setMasterVolume(snapped);
-      masterRef.current = snapped;
-      setEngineVolume(Math.round(snapped * bgmRef.current * 100) / 100, false);
-      sound.setVolume(Math.round(snapped * sfxRef.current * 100) / 100);
-    } else if (trackIdx === 1) {
-      setBgmVolume(snapped);
-      bgmRef.current = snapped;
-      setEngineVolume(Math.round(masterRef.current * snapped * 100) / 100, false);
-    } else if (trackIdx === 2) {
-      setSfxVolume(snapped);
-      sfxRef.current = snapped;
-      sound.setVolume(Math.round(masterRef.current * snapped * 100) / 100);
-    }
-  }, [setEngineVolume]);
+  }, []);
+
+  // Réglage direct au clic / glisser sur la jauge
+  const setTrackVolumeDirect = useCallback(
+    (channelIndex: number, clientX: number, gaugeElement: HTMLElement) => {
+      const rect = gaugeElement.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      const pct = Math.max(
+        0,
+        Math.min(100, Math.round(((clientX - rect.left) / rect.width) * 20) * 5)
+      );
+      selectTrack(channelIndex);
+      if (channelIndex === 0) {
+        setMasterVol(pct);
+        masterVolRef.current = pct;
+        applyAudioVolumes(pct, bgmVolRef.current, sfxVolRef.current);
+      } else if (channelIndex === 1) {
+        setBgmVol(pct);
+        bgmVolRef.current = pct;
+        applyAudioVolumes(masterVolRef.current, pct, sfxVolRef.current);
+      } else if (channelIndex === 2) {
+        setSfxVol(pct);
+        sfxVolRef.current = pct;
+        applyAudioVolumes(masterVolRef.current, bgmVolRef.current, pct);
+      }
+    },
+    [applyAudioVolumes, selectTrack]
+  );
 
   const [highScore, setHighScore] = useState<number>(() => {
     try {
@@ -282,8 +311,10 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
       // Touches d'ouverture/fermeture du mixeur audio
       if (key === 'tab' || key === 'v' || key === 'p') {
         e.preventDefault();
+        e.stopPropagation();
         setIsMixerOpen((prev) => {
           const next = !prev;
+          isMixerOpenRef.current = next;
           if (next) sound.playOption();
           else sound.playBack();
           return next;
@@ -293,27 +324,25 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
 
       // Si le mixeur est ouvert : navigation et réglages du mixeur par pas de 5 %
       if (isMixerOpenRef.current) {
-        if (e.key === 'ArrowUp' || key === 'z' || key === 'w') {
-          e.preventDefault();
-          setSelectedTrack((prev) => (prev > 0 ? prev - 1 : 2));
-          sound.playTick();
-        } else if (e.key === 'ArrowDown' || key === 's') {
-          e.preventDefault();
-          setSelectedTrack((prev) => (prev < 2 ? prev + 1 : 0));
-          sound.playTick();
-        } else if (e.key === 'ArrowLeft' || key === 'q' || key === 'a') {
-          e.preventDefault();
-          adjustTrackVolume(selectedTrackRef.current, -0.05);
-        } else if (e.key === 'ArrowRight' || key === 'd') {
-          e.preventDefault();
-          adjustTrackVolume(selectedTrackRef.current, 0.05);
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (e.key === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ' || key === 'z' || key === 'w') {
+          const next = selectedTrackRef.current > 0 ? selectedTrackRef.current - 1 : 2;
+          selectTrack(next);
+        } else if (e.key === 'ArrowDown' || e.code === 'KeyS' || key === 's') {
+          const next = selectedTrackRef.current < 2 ? selectedTrackRef.current + 1 : 0;
+          selectTrack(next);
+        } else if (e.key === 'ArrowLeft' || e.code === 'KeyA' || e.code === 'KeyQ' || key === 'q' || key === 'a') {
+          stepChannelVolume(selectedTrackRef.current, -5);
+        } else if (e.key === 'ArrowRight' || e.code === 'KeyD' || key === 'd') {
+          stepChannelVolume(selectedTrackRef.current, 5);
         } else if (e.key === 'Enter' || key === 'x') {
-          e.preventDefault();
           sound.playEnter();
           // La touche ✕ / Entrée valide uniquement, ne ferme JAMAIS le mixeur
         } else if (e.key === 'Escape' || key === 'o' || e.key === 'Backspace') {
-          e.preventDefault();
           setIsMixerOpen(false);
+          isMixerOpenRef.current = false;
           sound.playBack();
         }
         return;
@@ -349,7 +378,7 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [onExit, launchBall, adjustTrackVolume]);
+  }, [onExit, launchBall, selectTrack, stepChannelVolume]);
 
   // Commandes externes issues des boutons matériels PSP
   useEffect(() => {
@@ -360,6 +389,7 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
     if (action === 'start' || action === 'select') {
       setIsMixerOpen((prev) => {
         const next = !prev;
+        isMixerOpenRef.current = next;
         if (next) sound.playOption();
         else sound.playBack();
         return next;
@@ -369,24 +399,25 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
 
     // Si le mixeur est actif
     if (isMixerOpenRef.current) {
-      if (action === 'up') {
-        setSelectedTrack((prev) => (prev > 0 ? prev - 1 : 2));
-        sound.playTick();
-      } else if (action === 'down') {
-        setSelectedTrack((prev) => (prev < 2 ? prev + 1 : 0));
-        sound.playTick();
-      } else if (action === 'left') {
-        adjustTrackVolume(selectedTrackRef.current, -0.05);
-      } else if (action === 'right') {
-        adjustTrackVolume(selectedTrackRef.current, 0.05);
+      if (action === 'up' || action === 'dpad_up') {
+        const next = selectedTrackRef.current > 0 ? selectedTrackRef.current - 1 : 2;
+        selectTrack(next);
+      } else if (action === 'down' || action === 'dpad_down') {
+        const next = selectedTrackRef.current < 2 ? selectedTrackRef.current + 1 : 0;
+        selectTrack(next);
+      } else if (action === 'left' || action === 'dpad_left') {
+        stepChannelVolume(selectedTrackRef.current, -5);
+      } else if (action === 'right' || action === 'dpad_right') {
+        stepChannelVolume(selectedTrackRef.current, 5);
       } else if (action === 'vol_up') {
-        adjustTrackVolume(selectedTrackRef.current, 0.05);
+        stepChannelVolume(selectedTrackRef.current, 5);
       } else if (action === 'vol_down') {
-        adjustTrackVolume(selectedTrackRef.current, -0.05);
+        stepChannelVolume(selectedTrackRef.current, -5);
       } else if (action === 'cross') {
         sound.playEnter(); // Valide uniquement, ne ferme JAMAIS le mixeur
       } else if (action === 'circle') {
         setIsMixerOpen(false);
+        isMixerOpenRef.current = false;
         sound.playBack();
       }
       return;
@@ -394,21 +425,21 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
 
     // Commandes physiques de volume en jeu standard (mixeur fermé -> règle Général)
     if (action === 'vol_up') {
-      adjustTrackVolume(0, 0.05);
+      stepChannelVolume(0, 5);
       return;
     } else if (action === 'vol_down') {
-      adjustTrackVolume(0, -0.05);
+      stepChannelVolume(0, -5);
       return;
     }
 
     // Commandes en jeu standard
-    if (action === 'left') {
+    if (action === 'left' || action === 'dpad_left') {
       gameRef.current.paddleX = Math.max(10, gameRef.current.paddleX - 28);
       if (gameRef.current.ballAttached) {
         gameRef.current.ballX = gameRef.current.paddleX + gameRef.current.paddleW / 2;
       }
       sound.playTick();
-    } else if (action === 'right') {
+    } else if (action === 'right' || action === 'dpad_right') {
       gameRef.current.paddleX = Math.min(
         480 - 10 - gameRef.current.paddleW,
         gameRef.current.paddleX + 28
@@ -423,7 +454,7 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
       sound.playBack();
       onExit();
     }
-  }, [externalCommand, onExit, launchBall, adjustTrackVolume]);
+  }, [externalCommand, onExit, launchBall, selectTrack, stepChannelVolume]);
 
   // Boucle de rendu Canvas 2D (480x272 pixels natifs PSP)
   useEffect(() => {
@@ -802,14 +833,11 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
             <div className="space-y-1">
               {TRACKS.map((t, idx) => {
                 const isSelected = selectedTrack === idx;
-                const val = idx === 0 ? masterVolume : idx === 1 ? bgmVolume : sfxVolume;
+                const val = idx === 0 ? masterVol : idx === 1 ? bgmVol : sfxVol;
                 return (
                   <div
                     key={t.id}
-                    onClick={() => {
-                      setSelectedTrack(idx);
-                      sound.playTick();
-                    }}
+                    onClick={() => selectTrack(idx)}
                     className={`flex items-center transition-all ${
                       isSelected
                         ? 'bg-white/5 rounded-lg py-1 px-2 border border-white/5 text-white'
@@ -838,13 +866,13 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
                     >
                       <div
                         className="h-full bg-white/90 rounded-full transition-all duration-75 shadow-[0_0_6px_rgba(255,255,255,0.4)]"
-                        style={{ width: `${Math.round(val * 100)}%` }}
+                        style={{ width: `${val}%` }}
                       />
                     </div>
 
                     {/* Pourcentage : text-xs font-mono text-white/60 w-8 text-right */}
                     <span className="text-xs font-mono text-white/60 w-8 text-right">
-                      {Math.round(val * 100)}%
+                      {val}%
                     </span>
                   </div>
                 );
