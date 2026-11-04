@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { sound } from '../../services/sound';
-import { PSGlyph } from '../XMBIcons';
 
 interface RetroBrickGameProps {
   onExit: () => void;
@@ -33,7 +32,6 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  const [score, setScore] = useState<number>(0);
   const [highScore, setHighScore] = useState<number>(() => {
     try {
       return parseInt(localStorage.getItem('psp_brick_highscore') || '350', 10);
@@ -41,20 +39,19 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
       return 350;
     }
   });
-  const [lives, setLives] = useState<number>(3);
-  const [gameState, setGameState] = useState<'ready' | 'playing' | 'gameover' | 'victory'>('ready');
 
-  // Game internal mutable state referenced in the requestAnimationFrame loop
+  // État interne mutable accessible sans latence par la boucle requestAnimationFrame
   const gameRef = useRef({
     state: 'ready' as 'ready' | 'playing' | 'gameover' | 'victory',
-    paddleX: 208, // center in 480 wide canvas
+    paddleX: 208, // Centré sur l'écran 480 px
     paddleW: 64,
     paddleH: 8,
     ballX: 240,
-    ballY: 236,
+    ballY: 243,
     ballVx: 2.8,
     ballVy: -2.8,
     ballRadius: 4,
+    ballAttached: false,
     bricks: [] as Brick[],
     particles: [] as Particle[],
     keys: { left: false, right: false },
@@ -62,21 +59,21 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
     lives: 3,
   });
 
-  // Initialize Bricks
+  // Initialisation des briques
   const initBricks = () => {
     const rows = 4;
     const cols = 9;
     const brickW = 44;
     const brickH = 11;
     const padding = 6;
-    const offsetTop = 42;
+    const offsetTop = 48;
     const offsetLeft = 18;
 
     const rowColors = [
-      { color: '#ef4444', points: 40 }, // Red
-      { color: '#f59e0b', points: 30 }, // Amber
+      { color: '#ef4444', points: 40 }, // Rouge
+      { color: '#f59e0b', points: 30 }, // Ambre
       { color: '#06b6d4', points: 20 }, // Cyan
-      { color: '#10b981', points: 10 }, // Emerald
+      { color: '#10b981', points: 10 }, // Émeraude
     ];
 
     const bricks: Brick[] = [];
@@ -101,17 +98,30 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
     const g = gameRef.current;
     g.state = 'playing';
     g.paddleX = 208;
+    const paddleY = 272 - 24;
     g.ballX = 240;
-    g.ballY = 236;
+    g.ballY = paddleY - g.ballRadius - 1;
+    g.ballAttached = false;
     g.ballVx = (Math.random() > 0.5 ? 1 : -1) * (2.4 + Math.random() * 0.8);
     g.ballVy = -3.0;
     g.bricks = initBricks();
     g.particles = [];
     g.score = 0;
     g.lives = 3;
-    setScore(0);
-    setLives(3);
-    setGameState('playing');
+  };
+
+  const launchBall = () => {
+    const g = gameRef.current;
+    if (g.state === 'ready' || g.state === 'gameover' || g.state === 'victory') {
+      startNewGame();
+      return;
+    }
+    if (g.state === 'playing' && g.ballAttached) {
+      g.ballAttached = false;
+      sound.playEnter();
+      g.ballVx = (Math.random() > 0.5 ? 1 : -1) * (2.4 + Math.random() * 0.8);
+      g.ballVy = -3.2;
+    }
   };
 
   const spawnParticles = (x: number, y: number, color: string) => {
@@ -130,7 +140,46 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
     }
   };
 
-  // Keyboard navigation
+  // Mise à jour fluide de la position de la raquette au trackpad / souris / tactile
+  const updatePaddlePosition = (clientX: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const paddleW = gameRef.current.paddleW;
+    const targetX = (clientX - rect.left) * scaleX - paddleW / 2;
+    const clampedX = Math.max(8, Math.min(canvas.width - 8 - paddleW, targetX));
+    gameRef.current.paddleX = clampedX;
+    if (gameRef.current.ballAttached) {
+      gameRef.current.ballX = clampedX + paddleW / 2;
+    }
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    updatePaddlePosition(e.clientX);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    updatePaddlePosition(e.clientX);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (e.touches.length > 0) {
+      updatePaddlePosition(e.touches[0].clientX);
+    }
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    updatePaddlePosition(e.clientX);
+    launchBall();
+  };
+
+  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    updatePaddlePosition(e.clientX);
+    launchBall();
+  };
+
+  // Contrôles clavier
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
@@ -140,9 +189,7 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
         gameRef.current.keys.right = true;
       } else if (e.key === 'Enter' || key === 'x' || e.key === ' ') {
         e.preventDefault();
-        if (gameRef.current.state !== 'playing') {
-          startNewGame();
-        }
+        launchBall();
       } else if (e.key === 'Escape' || key === 'o' || e.key === 'Backspace') {
         e.preventDefault();
         sound.playBack();
@@ -167,31 +214,35 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
     };
   }, [onExit]);
 
-  // Handle External commands from PSP Console buttons
+  // Commandes externes issues des boutons matériels PSP
   useEffect(() => {
     if (!externalCommand) return;
     const { action } = externalCommand;
 
     if (action === 'left') {
       gameRef.current.paddleX = Math.max(10, gameRef.current.paddleX - 28);
+      if (gameRef.current.ballAttached) {
+        gameRef.current.ballX = gameRef.current.paddleX + gameRef.current.paddleW / 2;
+      }
       sound.playTick();
     } else if (action === 'right') {
       gameRef.current.paddleX = Math.min(
         480 - 10 - gameRef.current.paddleW,
         gameRef.current.paddleX + 28
       );
+      if (gameRef.current.ballAttached) {
+        gameRef.current.ballX = gameRef.current.paddleX + gameRef.current.paddleW / 2;
+      }
       sound.playTick();
     } else if (action === 'cross') {
-      if (gameRef.current.state !== 'playing') {
-        startNewGame();
-      }
+      launchBall();
     } else if (action === 'circle') {
       sound.playBack();
       onExit();
     }
   }, [externalCommand, onExit]);
 
-  // Canvas Game Engine Loop (480x272 PSP Native Screen)
+  // Boucle de rendu Canvas 2D (480x272 pixels natifs PSP)
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -206,10 +257,11 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
       const g = gameRef.current;
       const W = 480;
       const H = 272;
+      const paddleY = H - 24;
 
-      // 1. Logic Update
+      // 1. Mise à jour de la logique physique
       if (g.state === 'playing') {
-        // Paddle movement
+        // Déplacement raquette au clavier
         const paddleSpeed = 5.2;
         if (g.keys.left) {
           g.paddleX = Math.max(10, g.paddleX - paddleSpeed);
@@ -218,114 +270,117 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
           g.paddleX = Math.min(W - 10 - g.paddleW, g.paddleX + paddleSpeed);
         }
 
-        // Ball movement
-        g.ballX += g.ballVx;
-        g.ballY += g.ballVy;
-
-        // Wall collisions
-        if (g.ballX - g.ballRadius <= 8) {
-          g.ballX = 8 + g.ballRadius;
-          g.ballVx = Math.abs(g.ballVx);
-          sound.playTick();
-        } else if (g.ballX + g.ballRadius >= W - 8) {
-          g.ballX = W - 8 - g.ballRadius;
-          g.ballVx = -Math.abs(g.ballVx);
-          sound.playTick();
-        }
-
-        if (g.ballY - g.ballRadius <= 26) {
-          g.ballY = 26 + g.ballRadius;
-          g.ballVy = Math.abs(g.ballVy);
-          sound.playTick();
-        }
-
-        // Paddle collision
-        const paddleY = H - 24;
-        if (
-          g.ballY + g.ballRadius >= paddleY &&
-          g.ballY - g.ballRadius <= paddleY + g.paddleH &&
-          g.ballX >= g.paddleX - 4 &&
-          g.ballX <= g.paddleX + g.paddleW + 4 &&
-          g.ballVy > 0
-        ) {
-          sound.playTick();
-          const hitPos = (g.ballX - (g.paddleX + g.paddleW / 2)) / (g.paddleW / 2);
-          const speed = Math.sqrt(g.ballVx * g.ballVx + g.ballVy * g.ballVy);
-          const maxAngle = (Math.PI / 3); // 60 degrees max
-          const angle = hitPos * maxAngle;
-          g.ballVx = Math.sin(angle) * speed;
-          g.ballVy = -Math.abs(Math.cos(angle) * speed);
+        // Balle attachée à la raquette
+        if (g.ballAttached) {
+          g.ballX = g.paddleX + g.paddleW / 2;
           g.ballY = paddleY - g.ballRadius - 1;
-        }
+        } else {
+          // Déplacement libre de la balle
+          g.ballX += g.ballVx;
+          g.ballY += g.ballVy;
 
-        // Brick collisions
-        let remainingBricks = 0;
-        for (const brick of g.bricks) {
-          if (!brick.alive) continue;
-          remainingBricks++;
-
-          if (
-            g.ballX + g.ballRadius >= brick.x &&
-            g.ballX - g.ballRadius <= brick.x + brick.w &&
-            g.ballY + g.ballRadius >= brick.y &&
-            g.ballY - g.ballRadius <= brick.y + brick.h
-          ) {
-            brick.alive = false;
+          // Rebond murs gauche / droite
+          if (g.ballX - g.ballRadius <= 8) {
+            g.ballX = 8 + g.ballRadius;
+            g.ballVx = Math.abs(g.ballVx);
             sound.playTick();
-            spawnParticles(brick.x + brick.w / 2, brick.y + brick.h / 2, brick.color);
-            g.score += brick.points;
-            setScore(g.score);
-
-            // Update highscore
-            if (g.score > highScore) {
-              setHighScore(g.score);
-              try {
-                localStorage.setItem('psp_brick_highscore', String(g.score));
-              } catch {}
-            }
-
-            // Determine rebound axis
-            const overlapLeft = g.ballX + g.ballRadius - brick.x;
-            const overlapRight = brick.x + brick.w - (g.ballX - g.ballRadius);
-            const overlapTop = g.ballY + g.ballRadius - brick.y;
-            const overlapBottom = brick.y + brick.h - (g.ballY - g.ballRadius);
-
-            const minOverlap = Math.min(overlapLeft, overlapRight, overlapTop, overlapBottom);
-            if (minOverlap === overlapTop || minOverlap === overlapBottom) {
-              g.ballVy = -g.ballVy;
-            } else {
-              g.ballVx = -g.ballVx;
-            }
-            break;
+          } else if (g.ballX + g.ballRadius >= W - 8) {
+            g.ballX = W - 8 - g.ballRadius;
+            g.ballVx = -Math.abs(g.ballVx);
+            sound.playTick();
           }
-        }
 
-        // Victory condition
-        if (remainingBricks === 0) {
-          g.state = 'victory';
-          setGameState('victory');
-          sound.playOption();
-        }
+          // Rebond mur haut (sous le bandeau de score à y = 40)
+          if (g.ballY - g.ballRadius <= 40) {
+            g.ballY = 40 + g.ballRadius;
+            g.ballVy = Math.abs(g.ballVy);
+            sound.playTick();
+          }
 
-        // Ball out of bottom bound
-        if (g.ballY - g.ballRadius > H) {
-          g.lives--;
-          setLives(g.lives);
-          if (g.lives <= 0) {
-            sound.playBack();
-            g.state = 'gameover';
-            setGameState('gameover');
-          } else {
-            sound.playBack();
-            g.ballX = g.paddleX + g.paddleW / 2;
-            g.ballY = H - 36;
-            g.ballVx = (Math.random() > 0.5 ? 1 : -1) * 2.8;
-            g.ballVy = -2.8;
+          // Rebond raquette
+          if (
+            g.ballY + g.ballRadius >= paddleY &&
+            g.ballY - g.ballRadius <= paddleY + g.paddleH &&
+            g.ballX >= g.paddleX - 4 &&
+            g.ballX <= g.paddleX + g.paddleW + 4 &&
+            g.ballVy > 0
+          ) {
+            sound.playTick();
+            const hitPos = (g.ballX - (g.paddleX + g.paddleW / 2)) / (g.paddleW / 2);
+            const speed = Math.sqrt(g.ballVx * g.ballVx + g.ballVy * g.ballVy);
+            const maxAngle = Math.PI / 3; // 60 degrés max
+            const angle = hitPos * maxAngle;
+            g.ballVx = Math.sin(angle) * speed;
+            g.ballVy = -Math.abs(Math.cos(angle) * speed);
+            g.ballY = paddleY - g.ballRadius - 1;
+          }
+
+          // Collisions briques
+          let remainingBricks = 0;
+          for (const brick of g.bricks) {
+            if (!brick.alive) continue;
+            remainingBricks++;
+
+            if (
+              g.ballX + g.ballRadius >= brick.x &&
+              g.ballX - g.ballRadius <= brick.x + brick.w &&
+              g.ballY + g.ballRadius >= brick.y &&
+              g.ballY - g.ballRadius <= brick.y + brick.h
+            ) {
+              brick.alive = false;
+              sound.playTick();
+              spawnParticles(brick.x + brick.w / 2, brick.y + brick.h / 2, brick.color);
+              g.score += brick.points;
+
+              // Mise à jour record
+              if (g.score > highScore) {
+                setHighScore(g.score);
+                try {
+                  localStorage.setItem('psp_brick_highscore', String(g.score));
+                } catch {}
+              }
+
+              // Détermination de l'axe de rebond
+              const overlapLeft = g.ballX + g.ballRadius - brick.x;
+              const overlapRight = brick.x + brick.w - (g.ballX - g.ballRadius);
+              const overlapTop = g.ballY + g.ballRadius - brick.y;
+              const overlapBottom = brick.y + brick.h - (g.ballY - g.ballRadius);
+
+              const minOverlap = Math.min(overlapLeft, overlapRight, overlapTop, overlapBottom);
+              if (minOverlap === overlapTop || minOverlap === overlapBottom) {
+                g.ballVy = -g.ballVy;
+              } else {
+                g.ballVx = -g.ballVx;
+              }
+              break;
+            }
+          }
+
+          // Condition de victoire
+          if (remainingBricks === 0) {
+            g.state = 'victory';
+            sound.playOption();
+          }
+
+          // Balle perdue en bas
+          if (g.ballY - g.ballRadius > H) {
+            g.lives--;
+            if (g.lives <= 0) {
+              sound.playBack();
+              g.state = 'gameover';
+            } else {
+              sound.playBack();
+              g.ballAttached = true;
+              g.ballX = g.paddleX + g.paddleW / 2;
+              g.ballY = paddleY - g.ballRadius - 1;
+              g.ballVx = 0;
+              g.ballVy = 0;
+            }
           }
         }
       }
 
-      // Update Particles
+      // Mise à jour des particules
       for (let i = g.particles.length - 1; i >= 0; i--) {
         const p = g.particles[i];
         p.x += p.vx;
@@ -336,8 +391,8 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
         }
       }
 
-      // 2. Graphic Rendering (Native PSP 480x272)
-      // Background gradient
+      // 2. Rendu Graphique (Canvas 2D)
+      // Fond dégradé
       const bg = ctx.createLinearGradient(0, 0, 0, H);
       bg.addColorStop(0, '#0c1017');
       bg.addColorStop(0.5, '#070a0f');
@@ -345,76 +400,78 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
       ctx.fillStyle = bg;
       ctx.fillRect(0, 0, W, H);
 
-      // Cyber retro grid
-      ctx.strokeStyle = 'rgba(16, 185, 129, 0.07)';
+      // Grille rétro
+      ctx.strokeStyle = 'rgba(16, 185, 129, 0.06)';
       ctx.lineWidth = 1;
       for (let x = 0; x < W; x += 24) {
         ctx.beginPath();
-        ctx.moveTo(x, 26);
+        ctx.moveTo(x, 40);
         ctx.lineTo(x, H);
         ctx.stroke();
       }
-      for (let y = 26; y < H; y += 24) {
+      for (let y = 40; y < H; y += 24) {
         ctx.beginPath();
         ctx.moveTo(0, y);
         ctx.lineTo(W, y);
         ctx.stroke();
       }
 
-      // Border bounds
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+      // Cadre délimitant l'aire de jeu
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
       ctx.lineWidth = 1.5;
-      ctx.strokeRect(6, 26, W - 12, H - 28);
+      ctx.strokeRect(6, 40, W - 12, H - 40 - 18);
 
-      // HUD Top Bar
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(0, 0, W, 25);
-      ctx.strokeStyle = 'rgba(16, 185, 129, 0.3)';
+      // Bandeau haut épuré (sous la Top Status Bar du PSP)
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.fillRect(0, 20, W, 20);
+      ctx.strokeStyle = 'rgba(16, 185, 129, 0.35)';
       ctx.beginPath();
-      ctx.moveTo(0, 25);
-      ctx.lineTo(W, 25);
+      ctx.moveTo(0, 40);
+      ctx.lineTo(W, 40);
       ctx.stroke();
 
-      // Top text typography
+      // SCORE (à gauche)
+      ctx.textAlign = 'left';
+      ctx.font = 'bold 9.5px monospace';
       ctx.fillStyle = '#94a3b8';
-      ctx.font = 'bold 9px monospace';
-      ctx.fillText('SCORE', 12, 16);
+      ctx.fillText('SCORE', 16, 33);
       ctx.fillStyle = '#34d399';
-      ctx.fillText(String(g.score).padStart(5, '0'), 52, 16);
+      ctx.fillText(String(g.score).padStart(5, '0'), 56, 33);
 
+      // RECORD (au centre)
+      ctx.textAlign = 'center';
       ctx.fillStyle = '#94a3b8';
-      ctx.fillText('HIGH', 130, 16);
+      ctx.fillText('RECORD', W / 2 - 20, 33);
       ctx.fillStyle = '#f59e0b';
-      ctx.fillText(String(highScore).padStart(5, '0'), 160, 16);
+      ctx.fillText(String(highScore).padStart(5, '0'), W / 2 + 26, 33);
 
-      ctx.fillStyle = '#94a3b8';
-      ctx.fillText('VIES', 235, 16);
+      // VIES (à droite - billes luminescentes)
+      ctx.textAlign = 'right';
       for (let l = 0; l < 3; l++) {
-        ctx.fillStyle = l < g.lives ? '#ef4444' : 'rgba(255,255,255,0.15)';
         ctx.beginPath();
-        ctx.arc(270 + l * 12, 13, 4, 0, Math.PI * 2);
+        ctx.arc(W - 44 + l * 13, 30, 4.5, 0, Math.PI * 2);
+        ctx.fillStyle = l < g.lives ? '#ef4444' : 'rgba(255, 255, 255, 0.15)';
         ctx.fill();
+        ctx.strokeStyle = l < g.lives ? '#f87171' : 'rgba(255, 255, 255, 0.2)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
       }
+      ctx.textAlign = 'left';
 
-      ctx.fillStyle = '#38bdf8';
-      ctx.font = 'bold 8px monospace';
-      ctx.fillText('PSP™ BRICK BREAKER', 370, 16);
-
-      // Render Bricks
+      // Rendu des briques
       for (const b of g.bricks) {
         if (!b.alive) continue;
-        // Brick fill with drop shadow
         ctx.fillStyle = b.color;
         ctx.beginPath();
         ctx.roundRect(b.x, b.y, b.w, b.h, 2.5);
         ctx.fill();
 
-        // Brick top highlight
+        // Reflet supérieur
         ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
         ctx.fillRect(b.x + 2, b.y + 1, b.w - 4, 2);
       }
 
-      // Render Particles
+      // Rendu des particules
       for (const p of g.particles) {
         ctx.fillStyle = p.color;
         ctx.globalAlpha = Math.max(0, p.alpha);
@@ -424,8 +481,7 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
       }
       ctx.globalAlpha = 1.0;
 
-      // Render Paddle
-      const paddleY = H - 24;
+      // Rendu de la raquette
       const paddleGrad = ctx.createLinearGradient(g.paddleX, paddleY, g.paddleX, paddleY + g.paddleH);
       paddleGrad.addColorStop(0, '#38bdf8');
       paddleGrad.addColorStop(1, '#0284c7');
@@ -438,7 +494,7 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
       ctx.lineWidth = 1;
       ctx.stroke();
 
-      // Render Ball with neon aura
+      // Rendu de la balle avec aura néon
       ctx.shadowColor = '#38bdf8';
       ctx.shadowBlur = 8;
       ctx.fillStyle = '#ffffff';
@@ -447,66 +503,66 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
       ctx.fill();
       ctx.shadowBlur = 0;
 
-      // Ready / Game Over / Victory Modal Overlays
+      // Écrans modaux (Ready / Game Over / Victory)
       if (g.state === 'ready') {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-        ctx.fillRect(80, 75, 320, 110);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.fillRect(80, 80, 320, 105);
         ctx.strokeStyle = 'rgba(16, 185, 129, 0.6)';
         ctx.lineWidth = 1.5;
-        ctx.strokeRect(80, 75, 320, 110);
+        ctx.strokeRect(80, 80, 320, 105);
 
         ctx.fillStyle = '#34d399';
         ctx.font = 'bold 15px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('BRICK BREAKER ARCADE', W / 2, 108);
+        ctx.fillText('BRICK BREAKER', W / 2, 112);
 
         ctx.fillStyle = '#e2e8f0';
         ctx.font = '10px monospace';
-        ctx.fillText('Appuyer sur ✕ pour lancer la balle', W / 2, 134);
+        ctx.fillText('[Clic] ou [✕] pour lancer la balle', W / 2, 138);
 
         ctx.fillStyle = '#94a3b8';
         ctx.font = '8.5px monospace';
-        ctx.fillText('◀ / ▶ : Déplacer raquette   •   [◯] : Quitter XMB', W / 2, 156);
+        ctx.fillText('Trackpad / Souris pour déplacer • [◯] Quitter', W / 2, 160);
         ctx.textAlign = 'left';
       } else if (g.state === 'gameover') {
-        ctx.fillStyle = 'rgba(15, 5, 8, 0.85)';
-        ctx.fillRect(80, 75, 320, 110);
+        ctx.fillStyle = 'rgba(15, 5, 8, 0.88)';
+        ctx.fillRect(80, 80, 320, 105);
         ctx.strokeStyle = '#ef4444';
         ctx.lineWidth = 1.5;
-        ctx.strokeRect(80, 75, 320, 110);
+        ctx.strokeRect(80, 80, 320, 105);
 
         ctx.fillStyle = '#ef4444';
         ctx.font = 'bold 16px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('GAME OVER', W / 2, 108);
+        ctx.fillText('GAME OVER', W / 2, 112);
 
         ctx.fillStyle = '#f8fafc';
         ctx.font = '10px monospace';
-        ctx.fillText(`Score final : ${g.score} points`, W / 2, 132);
+        ctx.fillText(`Score final : ${g.score} points`, W / 2, 138);
 
         ctx.fillStyle = '#cbd5e1';
         ctx.font = '9px monospace';
-        ctx.fillText('[✕] Rejouer    •    [◯] Retour XMB', W / 2, 156);
+        ctx.fillText('[Clic] ou [✕] Rejouer • [◯] Retour', W / 2, 160);
         ctx.textAlign = 'left';
       } else if (g.state === 'victory') {
         ctx.fillStyle = 'rgba(5, 20, 15, 0.88)';
-        ctx.fillRect(80, 75, 320, 110);
+        ctx.fillRect(80, 80, 320, 105);
         ctx.strokeStyle = '#10b981';
         ctx.lineWidth = 1.5;
-        ctx.strokeRect(80, 75, 320, 110);
+        ctx.strokeRect(80, 80, 320, 105);
 
         ctx.fillStyle = '#34d399';
         ctx.font = 'bold 16px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('STAGE CLEAR ! VICTOIRE', W / 2, 108);
+        ctx.fillText('STAGE CLEAR ! VICTOIRE', W / 2, 112);
 
         ctx.fillStyle = '#f8fafc';
         ctx.font = '10px monospace';
-        ctx.fillText(`Score : ${g.score} points !`, W / 2, 132);
+        ctx.fillText(`Score : ${g.score} points !`, W / 2, 138);
 
         ctx.fillStyle = '#cbd5e1';
         ctx.font = '9px monospace';
-        ctx.fillText('[✕] Recommencer    •    [◯] Retour XMB', W / 2, 156);
+        ctx.fillText('[Clic] ou [✕] Recommencer • [◯] Retour', W / 2, 160);
         ctx.textAlign = 'left';
       }
 
@@ -526,24 +582,17 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
         ref={canvasRef}
         width={480}
         height={272}
-        className="w-full h-full object-contain bg-black cursor-none"
+        onPointerMove={handlePointerMove}
+        onMouseMove={handleMouseMove}
+        onTouchMove={handleTouchMove}
+        onPointerDown={handlePointerDown}
+        onClick={handleCanvasClick}
+        className="w-full h-full object-contain bg-black cursor-pointer touch-none"
       />
 
-      {/* Floating Bottom HUD helper buttons */}
-      <div className="absolute bottom-1 left-3 right-3 flex items-center justify-between text-[8px] font-mono text-white/50 pointer-events-none z-10">
-        <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1 text-white/80">
-            <PSGlyph type="cross" size={10} />
-            <span>{gameState === 'playing' ? 'En jeu' : 'Démarrer'}</span>
-          </span>
-          <span className="flex items-center gap-1 text-white/80">
-            <PSGlyph type="circle" size={10} />
-            <span>Quitter le jeu</span>
-          </span>
-          <span className="text-emerald-400 font-bold ml-2">SCORE : {score}</span>
-          <span className="text-red-400 font-bold">VIES : {lives}</span>
-        </div>
-        <span className="text-white/40">D-Pad ◀ / ▶ pour déplacer la raquette</span>
+      {/* Ligne d'aide unique et centrée au bas de l'écran (Chantier 2) */}
+      <div className="absolute bottom-1.5 left-0 right-0 flex items-center justify-center text-[8.5px] font-mono text-white/60 pointer-events-none z-10 tracking-wide">
+        [Trackpad / Souris] Déplacer • [Clic / ✕] Lancer • [◯] Quitter
       </div>
     </div>
   );

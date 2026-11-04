@@ -940,10 +940,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         <div className="absolute top-2 left-3 right-3 flex justify-between items-center z-30 text-[10px] font-medium tracking-wider text-white/80 drop-shadow">
           <div className="flex items-center gap-1.5 text-white/60 text-[9px] uppercase font-mono">
             {viewMode === 'game_screen' ? (
-              <span className="text-emerald-400 font-bold flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                UMD™ ARCADE GAME
-              </span>
+              <span>PSP™ UMD</span>
             ) : viewMode === 'player' ? (
               <span className="text-emerald-400 font-bold flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -956,18 +953,41 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
             )}
           </div>
 
-          <div className="flex items-center gap-2.5">
-            {isPlaying && viewMode !== 'player' && (
+          <div className="flex items-center gap-2 sm:gap-2.5">
+            {/* Témoin de lecture / Marquee du morceau en cours (Chantier 3) */}
+            {currentTrack && viewMode !== 'player' && (
               <div
                 onClick={() => pushState('player')}
-                className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/15 cursor-pointer hover:bg-white/20 animate-pulse"
+                className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/15 cursor-pointer hover:bg-white/20 transition-all max-w-[160px] sm:max-w-[200px] overflow-hidden flex-shrink-0"
+                title={`${currentTrack.title} — ${currentTrack.artist} (Ouvrir le lecteur)`}
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                <span className="text-[9px] text-emerald-300 font-mono">PLAY</span>
+                <span
+                  className={`text-[8.5px] font-bold flex-shrink-0 ${
+                    isPlaying ? 'text-emerald-400 animate-pulse' : 'text-white/60'
+                  }`}
+                >
+                  {isPlaying ? '▶' : '❚❚'}
+                </span>
+                <div className="overflow-hidden whitespace-nowrap flex-1 min-w-0">
+                  {currentTrack.title.length + currentTrack.artist.length > 18 ? (
+                    <div className="inline-flex animate-marquee">
+                      <span className="text-[9px] text-white/90 font-mono pr-6">
+                        {currentTrack.title} — {currentTrack.artist}
+                      </span>
+                      <span className="text-[9px] text-white/90 font-mono pr-6">
+                        {currentTrack.title} — {currentTrack.artist}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-[9px] text-white/90 font-mono truncate">
+                      {currentTrack.title} — {currentTrack.artist}
+                    </span>
+                  )}
+                </div>
               </div>
             )}
-            <span className="font-mono text-white/90">{dateStr}</span>
-            <span className="font-mono font-bold text-white">{timeStr}</span>
+            <span className="font-mono text-white/90 flex-shrink-0">{dateStr}</span>
+            <span className="font-mono font-bold text-white flex-shrink-0">{timeStr}</span>
 
             {/* JAUGE BATTERIE OFFICIELLE SONY PSP À 4 BARRES PLEINES PERMANENTES (Chantier 3) */}
             <div className="flex items-center gap-1 bg-white/10 px-1.5 py-0.5 rounded border border-white/20">
@@ -1764,41 +1784,27 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         </div>
       )}
 
-      {/* 9. BOTTOM CONTROLS BAR (Calée au bas de l'écran LCD, masquée en lecteur vidéo et en lecteur audio) */}
-      {viewMode !== 'video_player' && viewMode !== 'player' && (
+      {/* 9. BOTTOM CONTROLS BAR (Calée au bas de l'écran LCD, masquée en lecteur vidéo, audio et jeu - Chantier 2) */}
+      {viewMode !== 'video_player' && viewMode !== 'player' && viewMode !== 'game_screen' && (
         <div className="absolute bottom-1 left-3 right-3 flex items-center justify-between text-[8.5px] text-white/60 font-medium z-30 pointer-events-none">
-          {viewMode === 'game_screen' ? (
-            <div className="flex items-center gap-3">
-              <span className="flex items-center gap-1">
-                <PSGlyph type="cross" size={11} />
-                <span>Lancer la balle</span>
-              </span>
-              <span className="flex items-center gap-1">
-                <PSGlyph type="circle" size={11} />
-                <span>Quitter le jeu</span>
-              </span>
-              <span className="text-white/40">◀/▶ Déplacer raquette</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-3">
-              <span className="flex items-center gap-1">
-                <PSGlyph type="cross" size={11} />
-                <span>Valider / Entrer</span>
-              </span>
-              <span className="flex items-center gap-1">
-                <PSGlyph type="circle" size={11} />
-                <span>Retour</span>
-              </span>
-              <span className="flex items-center gap-1">
-                <PSGlyph type="square" size={11} />
-                <span>Play / Pause</span>
-              </span>
-              <span className="flex items-center gap-1">
-                <PSGlyph type="triangle" size={11} />
-                <span>Options</span>
-              </span>
-            </div>
-          )}
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1">
+              <PSGlyph type="cross" size={11} />
+              <span>Valider / Entrer</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <PSGlyph type="circle" size={11} />
+              <span>Retour</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <PSGlyph type="square" size={11} />
+              <span>Play / Pause</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <PSGlyph type="triangle" size={11} />
+              <span>Options</span>
+            </span>
+          </div>
         </div>
       )}
     </div>
