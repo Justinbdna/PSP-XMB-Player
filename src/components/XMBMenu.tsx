@@ -714,6 +714,14 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     }
   };
 
+  // Déclencheur dédié et autonome pour lancer le mini-jeu proprement (Chantier 1)
+  const launchRetroGame = (gameItem?: any) => {
+    const targetGame = gameItem || gamesList[0] || { id: 'game-1', title: 'Mini Jeu Rétro' };
+    pauseTrack();
+    setCurrentGame(targetGame);
+    pushState('game_screen', 'game');
+  };
+
   // Touche Croix (✕ / Entrée) : Entrer dans un dossier ou lancer la lecture plein écran
   const handleValidate = (overrideIndex?: number) => {
     const s = stateRef.current;
@@ -771,12 +779,8 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         return;
       }
       if (s.subListType === 'game') {
-        const selectedGame = s.gamesList[activeSubIndex];
-        if (selectedGame) {
-          pauseTrack();
-          setCurrentGame(selectedGame);
-          pushState('game_screen', 'game');
-        }
+        const selectedGame = s.gamesList[activeSubIndex] || s.gamesList[0];
+        launchRetroGame(selectedGame);
         return;
       }
       if (s.subListType === 'video') {
@@ -812,12 +816,8 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       if (currentItem.id === 'game-ms') targetType = 'game';
       pushState('sublist', targetType);
     } else if (currentItem.id === 'game-1' || currentItem.type === 'game') {
-      const selectedGame = s.gamesList.find((g) => g.id === currentItem.id) || s.gamesList[0];
-      if (selectedGame) {
-        pauseTrack();
-        setCurrentGame(selectedGame);
-        pushState('game_screen', 'game');
-      }
+      const selectedGame = s.gamesList.find((g) => g.id === currentItem.id) || s.gamesList[0] || currentItem;
+      launchRetroGame(selectedGame);
       return;
     } else if (currentItem.type === 'search') {
       setIsSearchModalOpen(true);
@@ -1327,7 +1327,12 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                         e.stopPropagation();
                         setItemIndex(idx);
                         stateRef.current.itemIndex = idx;
-                        handleValidate(idx);
+                        if (item.id === 'game-1' || item.type === 'game') {
+                          sound.playEnter();
+                          launchRetroGame(item);
+                        } else {
+                          handleValidate(idx);
+                        }
                       }}
                       className={`h-11 flex items-center px-3 gap-3 rounded-lg cursor-pointer transition-all duration-200 ${
                         isSelected
@@ -1431,7 +1436,8 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                           e.stopPropagation();
                           setSubItemIndex(idx);
                           stateRef.current.subItemIndex = idx;
-                          handleValidate(idx);
+                          sound.playEnter();
+                          launchRetroGame(game);
                         }}
                         className={`h-12 flex items-center px-3 gap-2.5 rounded-lg cursor-pointer transition-all duration-200 ${
                           isSelected
