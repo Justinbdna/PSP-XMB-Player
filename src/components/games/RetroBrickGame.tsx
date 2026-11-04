@@ -84,14 +84,26 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
     }
   }, [setEngineVolume]);
 
-  const renderAsciiBar = (value: number): string => {
-    const totalBars = 20; // Jauge haute précision par tranche de 5 %
-    const filledBars = Math.max(0, Math.min(totalBars, Math.round(value * totalBars)));
-    const filled = '█'.repeat(filledBars);
-    const empty = '░'.repeat(totalBars - filledBars);
-    const percent = Math.round(value * 100);
-    return `[${filled}${empty}] ${percent}%`;
-  };
+  // Réglage direct du volume (clic ou glisser du pointeur sur la jauge)
+  const setTrackVolumeDirect = useCallback((trackIdx: number, clientX: number, gaugeElement: HTMLElement) => {
+    const rect = gaugeElement.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const snapped = Math.round(ratio * 20) / 20; // Pas de 5 %
+    setSelectedTrack(trackIdx);
+    sound.playTick();
+    if (trackIdx === 0) {
+      setMasterVolume(snapped);
+      setEngineVolume(Math.round(snapped * bgmRef.current * 100) / 100);
+      sound.setVolume(Math.round(snapped * sfxRef.current * 100) / 100);
+    } else if (trackIdx === 1) {
+      setBgmVolume(snapped);
+      setEngineVolume(Math.round(masterRef.current * snapped * 100) / 100);
+    } else if (trackIdx === 2) {
+      setSfxVolume(snapped);
+      sound.setVolume(Math.round(masterRef.current * snapped * 100) / 100);
+    }
+  }, [setEngineVolume]);
 
   const [highScore, setHighScore] = useState<number>(() => {
     try {
@@ -283,7 +295,11 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
         } else if (e.key === 'ArrowRight' || key === 'd') {
           e.preventDefault();
           adjustTrackVolume(selectedTrackRef.current, 0.05);
-        } else if (e.key === 'Escape' || e.key === 'Enter' || key === 'x' || key === 'o' || e.key === ' ' || e.key === 'Backspace') {
+        } else if (e.key === 'Enter' || key === 'x') {
+          e.preventDefault();
+          sound.playEnter();
+          // La touche ✕ / Entrée valide uniquement, ne ferme JAMAIS le mixeur
+        } else if (e.key === 'Escape' || key === 'o' || e.key === 'Backspace') {
           e.preventDefault();
           setIsMixerOpen(false);
           sound.playBack();
@@ -351,10 +367,25 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
         adjustTrackVolume(selectedTrackRef.current, -0.05);
       } else if (action === 'right') {
         adjustTrackVolume(selectedTrackRef.current, 0.05);
-      } else if (action === 'cross' || action === 'circle') {
+      } else if (action === 'vol_up') {
+        adjustTrackVolume(selectedTrackRef.current, 0.05);
+      } else if (action === 'vol_down') {
+        adjustTrackVolume(selectedTrackRef.current, -0.05);
+      } else if (action === 'cross') {
+        sound.playEnter(); // Valide uniquement, ne ferme JAMAIS le mixeur
+      } else if (action === 'circle') {
         setIsMixerOpen(false);
         sound.playBack();
       }
+      return;
+    }
+
+    // Commandes physiques de volume en jeu standard (mixeur fermé -> règle Général)
+    if (action === 'vol_up') {
+      adjustTrackVolume(0, 0.05);
+      return;
+    } else if (action === 'vol_down') {
+      adjustTrackVolume(0, -0.05);
       return;
     }
 
@@ -737,34 +768,26 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
         [Trackpad] Déplacer • [Clic / ✕] Lancer • [SELECT] Mixeur • [◯] Quitter
       </div>
 
-      {/* Overlay Rétro Mixeur Multipiste */}
+      {/* Overlay Rétro Mixeur Multipiste - Glassmorphism Sobre Sony XMB */}
       {isMixerOpen && (
         <div
-          className="absolute inset-0 z-30 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in p-4"
-          onClick={(e) => e.stopPropagation()}
+          className="absolute inset-0 z-30 flex items-center justify-center bg-black/60 backdrop-blur-md animate-fade-in p-4"
+          onClick={() => {
+            setIsMixerOpen(false);
+            sound.playBack();
+          }}
         >
-          <div className="w-[360px] max-w-[95%] bg-[#080d14]/95 border-2 border-emerald-500/70 rounded-lg p-3 shadow-2xl shadow-emerald-950/60 font-mono text-white select-none">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-emerald-500/30 pb-1 mb-2">
-              <div className="flex items-center space-x-1.5">
-                <span className="text-emerald-400 text-xs">🎛️</span>
-                <span className="text-[11px] font-bold tracking-wider text-emerald-400 uppercase">
-                  [ MIXEUR AUDIO PSP ]
-                </span>
-              </div>
-              <button
-                onClick={() => {
-                  setIsMixerOpen(false);
-                  sound.playBack();
-                }}
-                className="text-[9px] text-slate-400 hover:text-white px-1.5 py-0.5 rounded border border-white/10 hover:border-white/30 transition-colors"
-              >
-                [✕ Fermer]
-              </button>
+          <div
+            className="bg-zinc-950/80 backdrop-blur-2xl border border-white/10 rounded-2xl p-6 w-80 shadow-2xl text-white select-none"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* En-tête sobre */}
+            <div className="mb-4">
+              <h3 className="text-sm font-medium tracking-wide text-white/90">Mixeur audio</h3>
             </div>
 
-            {/* Pistes de volume */}
-            <div className="space-y-1.5 mb-2.5">
+            {/* Pistes et curseurs épurés */}
+            <div className="space-y-2">
               {TRACKS.map((t, idx) => {
                 const isSelected = selectedTrack === idx;
                 const val = idx === 0 ? masterVolume : idx === 1 ? bgmVolume : sfxVolume;
@@ -775,51 +798,49 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
                       setSelectedTrack(idx);
                       sound.playTick();
                     }}
-                    className={`p-1.5 rounded transition-colors cursor-pointer border ${
+                    className={`px-3 py-2 rounded-xl transition-all border ${
                       isSelected
-                        ? 'bg-emerald-950/60 border-emerald-400/80 text-white shadow-sm'
-                        : 'bg-black/40 border-transparent hover:border-white/10 text-slate-300'
+                        ? 'bg-white/5 border-white/10 text-white shadow-sm'
+                        : 'border-transparent text-white/70 hover:bg-white/[0.02]'
                     }`}
                   >
-                    <div className="flex justify-between items-center text-[9.5px] font-semibold mb-0.5">
-                      <span className={isSelected ? 'text-emerald-300 font-bold' : ''}>
-                        {isSelected ? '▶ ' : '  '}
+                    <div className="flex justify-between items-center mb-1.5">
+                      <span className={`text-xs ${isSelected ? 'text-white font-medium' : 'text-white/70'}`}>
                         {t.label}
                       </span>
-                      <div className="flex items-center space-x-1">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            adjustTrackVolume(idx, -0.05);
-                          }}
-                          className="w-5 h-5 flex items-center justify-center rounded bg-slate-800 hover:bg-slate-700 active:scale-95 text-[11px] text-white border border-white/10"
-                          title="-5%"
-                        >
-                          -
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            adjustTrackVolume(idx, 0.05);
-                          }}
-                          className="w-5 h-5 flex items-center justify-center rounded bg-slate-800 hover:bg-slate-700 active:scale-95 text-[11px] text-white border border-white/10"
-                          title="+5%"
-                        >
-                          +
-                        </button>
-                      </div>
+                      <span className="text-xs font-mono text-white/60 w-9 text-right">
+                        {Math.round(val * 100)}%
+                      </span>
                     </div>
-                    <div className="text-[9px] tracking-tight font-mono text-emerald-400/90 pl-3">
-                      {renderAsciiBar(val)}
+
+                    {/* Jauge horizontale fine avec réglage direct clic / glisser */}
+                    <div
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                        setTrackVolumeDirect(idx, e.clientX, e.currentTarget);
+                      }}
+                      onPointerMove={(e) => {
+                        if (e.buttons === 1) {
+                          e.stopPropagation();
+                          setTrackVolumeDirect(idx, e.clientX, e.currentTarget);
+                        }
+                      }}
+                      className="relative h-1.5 bg-white/15 rounded-full overflow-hidden cursor-pointer"
+                    >
+                      <div
+                        className="h-full bg-white/90 rounded-full transition-all duration-75 shadow-[0_0_8px_rgba(255,255,255,0.35)]"
+                        style={{ width: `${Math.round(val * 100)}%` }}
+                      />
                     </div>
                   </div>
                 );
               })}
             </div>
 
-            {/* Aide navigation */}
-            <div className="pt-1.5 border-t border-emerald-500/20 flex items-center justify-between text-[7.5px] text-slate-400">
-              <span>▲▼ Canal • ◄► -/+ 5%</span>
+            {/* Légende de contrôle sobre */}
+            <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-[9px] text-white/40 tracking-wide font-mono">
+              <span>▲▼ Canal • ◄► Régler</span>
               <span>[SELECT / START / ◯] Fermer</span>
             </div>
           </div>

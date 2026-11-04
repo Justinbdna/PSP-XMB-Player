@@ -59,6 +59,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     pauseTrack,
     togglePlay,
     seekRelative,
+    adjustVolume,
   } = useAudio();
 
   // Navigation View & Stack
@@ -938,6 +939,10 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       handleSelect();
     } else if (action === 'start') {
       togglePlay();
+    } else if (action === 'vol_up') {
+      adjustVolume(0.05);
+    } else if (action === 'vol_down') {
+      adjustVolume(-0.05);
     }
   }, [externalCommand]);
 

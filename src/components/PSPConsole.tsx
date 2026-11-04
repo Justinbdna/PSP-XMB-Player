@@ -57,7 +57,7 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
   } | null>(null);
 
 
-  const { adjustVolume, togglePlay, showVolumeOSD, volume } = useAudio();
+  const { togglePlay, showVolumeOSD, volume } = useAudio();
   const [powerOn] = useState<boolean>(true);
 
   // Send command to XMB screen without losing focus
@@ -368,7 +368,7 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
           {/* Volume - : left 31.0%, top 92%, width 4.5%, height 6% */}
           <button
             onClick={() => {
-              adjustVolume(-0.05);
+              sendCommand('vol_down');
               sound.playTick();
             }}
             aria-label="Volume -"
@@ -379,7 +379,7 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
           {/* Volume + : recalibré chirurgicalement sur (+) à left 38.6%, top 92%, width 4.5%, height 6% */}
           <button
             onClick={() => {
-              adjustVolume(0.05);
+              sendCommand('vol_up');
               sound.playTick();
             }}
             aria-label="Volume +"
