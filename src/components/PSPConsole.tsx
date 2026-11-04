@@ -59,41 +59,61 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
   const { togglePlay, showVolumeOSD, volume } = useAudio();
   const [powerOn] = useState<boolean>(true);
 
-  // Chantier 1 & 2 : Détection mode portrait (Rotate Guard) et auto-scale proportionnel
+  // Chantier 1 & 2 : Détection mode portrait (Rotate Guard) et auto-scale proportionnel via visualViewport
+  const [scale, setScale] = useState<number>(1);
   const [isPortrait, setIsPortrait] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
-    return window.innerWidth <= 950 && window.innerHeight > window.innerWidth;
+    const vw = window.visualViewport ? window.visualViewport.width : window.innerWidth;
+    const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    return vw <= 950 && vh > vw;
   });
-  const [scale, setScale] = useState<number>(1);
 
   useEffect(() => {
-    const updateDimensions = () => {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
+    const updateScale = () => {
+      // Zone visible réelle tenant compte des barres de navigation Safari
+      const vw = window.visualViewport ? window.visualViewport.width : window.innerWidth;
+      const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
 
-      // 1. Détection orientation portrait sous 950px
-      const portrait = w <= 950 && h > w;
+      // Détection mode portrait (Rotate Guard sous 950px)
+      const portrait = vw <= 950 && vh > vw;
       setIsPortrait(portrait);
 
-      // 2. Calcul du facteur d'échelle proportionnel pour tenir parfaitement dans l'écran
-      const padding = 20;
+      // Marges de sécurité adaptatives (Dynamic Island, barre Safari et bordures)
+      const paddingX = 40;
+      const paddingY = 24;
+
       const targetWidth = 940;
       const targetHeight = 460;
-      const availableWidth = w - padding;
-      const availableHeight = h - padding;
+
+      const availableWidth = Math.max(300, vw - paddingX);
+      const availableHeight = Math.max(200, vh - paddingY);
 
       const scaleX = availableWidth / targetWidth;
       const scaleY = availableHeight / targetHeight;
-      const finalScale = Math.min(1, scaleX, scaleY); // Plafond à 1 sur desktop
-      setScale(Math.max(0.35, finalScale));
+
+      // Dézoom de confort (multiplicateur 0.94) pour aérer la console
+      const computedScale = Math.min(1, scaleX, scaleY) * 0.94;
+
+      setScale(Math.max(0.32, computedScale));
     };
 
-    updateDimensions();
-    window.addEventListener('resize', updateDimensions);
-    window.addEventListener('orientationchange', updateDimensions);
+    updateScale();
+
+    // Écoute des redimensionnements de la zone Safari
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', updateScale);
+      window.visualViewport.addEventListener('scroll', updateScale);
+    }
+    window.addEventListener('resize', updateScale);
+    window.addEventListener('orientationchange', updateScale);
+
     return () => {
-      window.removeEventListener('resize', updateDimensions);
-      window.removeEventListener('orientationchange', updateDimensions);
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', updateScale);
+        window.visualViewport.removeEventListener('scroll', updateScale);
+      }
+      window.removeEventListener('resize', updateScale);
+      window.removeEventListener('orientationchange', updateScale);
     };
   }, []);
 
