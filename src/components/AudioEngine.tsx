@@ -69,6 +69,9 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     localAudioRef.current = localAudio;
 
     const attachListeners = (audio: HTMLAudioElement, type: 'direct' | 'local') => {
+      const onCanPlay = () => {
+        console.log(`[AudioEngine] Prêt à lire [${type}] :`, audio.src);
+      };
       const onPlay = () => {
         if (activeTypeRef.current === type) {
           setIsPlaying(true);
@@ -98,12 +101,13 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       };
       const onError = (e: Event) => {
         if (activeTypeRef.current === type) {
-          console.warn(`HTML5 Audio playback error [${type}]:`, e);
+          console.error(`[AudioEngine] Erreur chargement audio [${type}] :`, audio.error, audio.src, e);
           setIsPlaying(false);
           setAudioError('Erreur de lecture');
         }
       };
 
+      audio.addEventListener('canplay', onCanPlay);
       audio.addEventListener('play', onPlay);
       audio.addEventListener('pause', onPause);
       audio.addEventListener('timeupdate', onTimeUpdate);
@@ -112,6 +116,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       audio.addEventListener('error', onError);
 
       return () => {
+        audio.removeEventListener('canplay', onCanPlay);
         audio.removeEventListener('play', onPlay);
         audio.removeEventListener('pause', onPause);
         audio.removeEventListener('timeupdate', onTimeUpdate);
@@ -153,19 +158,23 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return activeTypeRef.current === 'local' ? localAudioRef.current : directAudioRef.current;
   };
 
-  // Moteur de lecture hybride (Chantier 4)
-  const playTrack = (track: Track) => {
+  // Moteur de lecture hybride (Chantier 2)
+  const playTrack = async (track: Track) => {
     saveTrackToHistory(track);
     setCurrentTrack(track);
     setAudioError(null);
 
     const isLocal = isLocalTrack(track);
-    const audioSrc = track.url || track.previewUrl;
+    const rawUrl = track.url || track.previewUrl || '';
 
-    if (!audioSrc || audioSrc.trim() === '') {
+    if (!rawUrl || rawUrl.trim() === '') {
       setAudioError('Fichier audio introuvable');
       return;
     }
+
+    // Normalisation stricte de l'URL pour gérer les espaces et caractères spéciaux
+    const decoded = decodeURI(rawUrl);
+    const finalAudioSrc = rawUrl.startsWith('http') ? rawUrl : encodeURI(decoded);
 
     if (isLocal) {
       // 1. FICHIER LOCAL (Même origine) -> Passage par Web Audio API & AnalyserNode
@@ -187,25 +196,33 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
       }
 
+      // Réveil asynchrone de l'AudioContext sur Safari (WebKit)
       if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
-        audioCtxRef.current.resume().catch(console.warn);
+        try {
+          await audioCtxRef.current.resume();
+        } catch (e) {
+          console.warn('[AudioEngine] Erreur reprise AudioContext:', e);
+        }
       }
 
+      // Connexion robuste au nœud d'analyse FFT et à la sortie audio
       if (localAudioRef.current && audioCtxRef.current && analyserRef.current && !sourceNodeRef.current) {
         try {
           const source = audioCtxRef.current.createMediaElementSource(localAudioRef.current);
           source.connect(analyserRef.current);
           analyserRef.current.connect(audioCtxRef.current.destination);
           sourceNodeRef.current = source;
+          setActiveAnalyser(analyserRef.current);
         } catch (e) {
-          console.warn('Web Audio node connection error:', e);
+          console.warn('[AudioEngine] Échec connexion graphe Web Audio, repli matériel direct :', e);
+          setActiveAnalyser(null);
         }
+      } else if (analyserRef.current) {
+        setActiveAnalyser(analyserRef.current);
       }
 
-      setActiveAnalyser(analyserRef.current);
-
       if (localAudioRef.current) {
-        localAudioRef.current.src = audioSrc;
+        localAudioRef.current.src = finalAudioSrc;
         localAudioRef.current.currentTime = 0;
         localAudioRef.current.volume = volume;
         setDuration(track.durationMs ? track.durationMs / 1000 : 30);
@@ -213,8 +230,9 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         localAudioRef.current.play().then(() => {
           setIsPlaying(true);
           setAudioError(null);
+          console.log('[AudioEngine] Lecture locale démarrée :', finalAudioSrc);
         }).catch((err) => {
-          console.warn('Local play prevented:', err);
+          console.warn('[AudioEngine] Lecture locale empêchée par le navigateur :', err);
           setIsPlaying(false);
         });
       }
@@ -227,7 +245,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setActiveAnalyser(null);
 
       if (directAudioRef.current) {
-        directAudioRef.current.src = audioSrc;
+        directAudioRef.current.src = finalAudioSrc;
         directAudioRef.current.currentTime = 0;
         directAudioRef.current.volume = volume;
         setDuration(track.durationMs ? track.durationMs / 1000 : 30);
@@ -235,8 +253,9 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         directAudioRef.current.play().then(() => {
           setIsPlaying(true);
           setAudioError(null);
+          console.log('[AudioEngine] Lecture iTunes démarrée :', finalAudioSrc);
         }).catch((err) => {
-          console.warn('Direct play prevented:', err);
+          console.warn('[AudioEngine] Lecture directe empêchée :', err);
           setIsPlaying(false);
         });
       }
@@ -251,13 +270,17 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  const togglePlay = () => {
+  const togglePlay = async () => {
     const audio = getActiveAudio();
     if (!audio) return;
     if (!currentTrack) return;
 
     if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
-      audioCtxRef.current.resume().catch(console.warn);
+      try {
+        await audioCtxRef.current.resume();
+      } catch (e) {
+        console.warn('[AudioEngine] Erreur reprise AudioContext:', e);
+      }
     }
 
     if (isPlaying) {
@@ -267,7 +290,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setIsPlaying(true);
         setAudioError(null);
       }).catch((err) => {
-        console.warn('Resume failed:', err);
+        console.warn('[AudioEngine] Reprise échouée:', err);
         setIsPlaying(false);
       });
     }
