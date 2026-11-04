@@ -51,10 +51,13 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     duration,
     volume,
     isYouTubeActive,
+    audioError,
+    analyser,
     playTrack,
     pauseTrack,
     togglePlay,
     seekRelative,
+    resumeAudioContext,
   } = useAudio();
 
   // Navigation View & Stack
@@ -475,6 +478,9 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   const handleValidate = () => {
     const s = stateRef.current;
     if (s.isSearchModalOpen) return;
+
+    // Réveil immédiat de l'AudioContext lors d'une interaction utilisateur (touche ✕)
+    resumeAudioContext();
 
     // Si le volet d'options est ouvert pendant la lecture vidéo, alterner le mode d'affichage
     if (s.isOptionsOpen) {
@@ -901,11 +907,17 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
             {/* Track Info & Visualizer */}
             <div className="flex flex-col justify-center flex-1 min-w-0 pr-2">
               <div className="flex items-center gap-2 mb-0.5">
-                <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono text-[8px] font-bold">
-                  {isPlaying ? 'LECTURE' : 'EN PAUSE'}
-                </span>
+                {audioError ? (
+                  <span className="px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/30 font-mono text-[8px] font-bold animate-pulse">
+                    {audioError.toUpperCase()}
+                  </span>
+                ) : (
+                  <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono text-[8px] font-bold">
+                    {isPlaying ? 'LECTURE' : 'EN PAUSE'}
+                  </span>
+                )}
                 <span className="text-[8px] font-mono text-white/40">
-                  {isYouTubeActive ? 'YOUTUBE AUDIO STREAM (90s / FULL)' : 'AAC 256kbps • 44.1kHz'}
+                  {isYouTubeActive ? 'YOUTUBE AUDIO STREAM (FULL)' : 'AAC 256kbps • 44.1kHz'}
                 </span>
               </div>
 
@@ -920,6 +932,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
               <div className="w-full bg-black/40 backdrop-blur-sm rounded-lg p-1 border border-white/10 shadow-inner">
                 <AudioVisualizer
                   isPlaying={isPlaying}
+                  analyser={analyser}
                   isYouTube={isYouTubeActive}
                   bpm={currentTrack.bpm || 120}
                 />

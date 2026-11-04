@@ -20,13 +20,15 @@ export interface YouTubeAudioBridgeHandle {
 }
 
 export interface YouTubeAudioBridgeProps {
+  isActive?: boolean;
   onStateChange?: (isPlaying: boolean) => void;
   onTimeUpdate?: (currentTime: number, duration: number) => void;
   onEnded?: () => void;
+  onError?: (errorCode: number) => void;
 }
 
 export const YouTubeAudioBridge = forwardRef<YouTubeAudioBridgeHandle, YouTubeAudioBridgeProps>(
-  ({ onStateChange, onTimeUpdate, onEnded }, ref) => {
+  ({ isActive = false, onStateChange, onTimeUpdate, onEnded, onError }, ref) => {
     const playerRef = useRef<any>(null);
     const isReadyRef = useRef<boolean>(false);
     const pendingVideoIdRef = useRef<string | null>(null);
@@ -48,6 +50,7 @@ export const YouTubeAudioBridge = forwardRef<YouTubeAudioBridgeHandle, YouTubeAu
             disablekb: 1,
             fs: 0,
             playsinline: 1,
+            enablejsapi: 1,
             origin: window.location.origin,
           },
           events: {
@@ -70,6 +73,7 @@ export const YouTubeAudioBridge = forwardRef<YouTubeAudioBridgeHandle, YouTubeAu
             onError: (err: any) => {
               console.warn('YouTube Player Error:', err);
               onStateChange?.(false);
+              onError?.(err?.data || 100);
             },
           },
         });
@@ -114,7 +118,7 @@ export const YouTubeAudioBridge = forwardRef<YouTubeAudioBridgeHandle, YouTubeAu
           playerRef.current = null;
         }
       };
-    }, [onEnded, onStateChange, onTimeUpdate]);
+    }, [onEnded, onError, onStateChange, onTimeUpdate]);
 
     useImperativeHandle(ref, () => ({
       play: (videoId: string) => {
@@ -167,10 +171,14 @@ export const YouTubeAudioBridge = forwardRef<YouTubeAudioBridgeHandle, YouTubeAu
     return (
       <div
         id="youtube-audio-bridge-container"
-        className="w-0 h-0 opacity-0 pointer-events-none overflow-hidden absolute -top-[9999px] -left-[9999px]"
+        className={`absolute bottom-2 right-2 transition-opacity duration-300 ${
+          isActive
+            ? 'w-24 h-16 opacity-30 rounded overflow-hidden border border-white/20 z-10 pointer-events-auto shadow-md'
+            : 'w-0 h-0 opacity-0 pointer-events-none overflow-hidden -top-[9999px]'
+        }`}
         aria-hidden="true"
       >
-        <div id="youtube-audio-bridge-iframe" />
+        <div id="youtube-audio-bridge-iframe" className="w-full h-full" />
       </div>
     );
   }
