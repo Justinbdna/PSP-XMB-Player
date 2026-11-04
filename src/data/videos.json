@@ -44,18 +44,7 @@
     "codec": "MPEG-4 AVC / H.264"
   },
   {
-    "id": "vid-5-beyonce-baby-boy-video-ft-sean-p",
-    "title": "Beyoncé Baby Boy (Video) ft. Sean Paul",
-    "artist": "Sélection Personnelle",
-    "thumbnail": "",
-    "url": "/videos/Beyonce%CC%81%20-%20Baby%20Boy%20(Video)%20ft.%20Sean%20Paul.mp4",
-    "fileSizeBytes": 16701864,
-    "sizeDisplay": "15.9 Mo",
-    "duration": "--:--",
-    "codec": "MPEG-4 AVC / H.264"
-  },
-  {
-    "id": "vid-6-beyonce-crazy-in-love-ft-jay-z",
+    "id": "vid-5-beyonce-crazy-in-love-ft-jay-z",
     "title": "Beyoncé Crazy In Love ft. JAY Z",
     "artist": "Sélection Personnelle",
     "thumbnail": "",
@@ -66,13 +55,24 @@
     "codec": "MPEG-4 AVC / H.264"
   },
   {
-    "id": "vid-7-beyonce-shakira-beautiful-liar",
+    "id": "vid-6-beyonce-shakira-beautiful-liar",
     "title": "Beyoncé, Shakira Beautiful Liar",
     "artist": "Sélection Personnelle",
     "thumbnail": "",
     "url": "/videos/Beyonce%CC%81,%20Shakira%20-%20Beautiful%20Liar.mp4",
     "fileSizeBytes": 12700741,
     "sizeDisplay": "12.1 Mo",
+    "duration": "--:--",
+    "codec": "MPEG-4 AVC / H.264"
+  },
+  {
+    "id": "vid-7-beyonce-baby-boy-video-ft-sean-p",
+    "title": "Beyoncé Baby Boy (Video) ft. Sean Paul",
+    "artist": "Sélection Personnelle",
+    "thumbnail": "",
+    "url": "/videos/Beyonc%C3%A9%20-%20Baby%20Boy%20(Video)%20ft.%20Sean%20Paul.mp4",
+    "fileSizeBytes": 16701864,
+    "sizeDisplay": "15.9 Mo",
     "duration": "--:--",
     "codec": "MPEG-4 AVC / H.264"
   },
@@ -133,10 +133,10 @@
   },
   {
     "id": "vid-13-theodora-mon-bebe-free-kitty-ver",
-    "title": "THEODORA MON BÉBÉ (Free kitty version)",
+    "title": "THEODORA MON BÉBÉ (Free kitty version)",
     "artist": "Sélection Personnelle",
     "thumbnail": "",
-    "url": "/videos/THEODORA%20-%20MON%20BE%CC%81BE%CC%81%20(Free%20kitty%20version).mp4",
+    "url": "/videos/THEODORA%20-%20MON%20B%C3%89B%C3%89%20(Free%20kitty%20version).mp4",
     "fileSizeBytes": 7389476,
     "sizeDisplay": "7.0 Mo",
     "duration": "--:--",

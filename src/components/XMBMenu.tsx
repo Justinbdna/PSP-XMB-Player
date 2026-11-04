@@ -59,6 +59,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     pauseTrack,
     togglePlay,
     seekRelative,
+    adjustVolume,
   } = useAudio();
 
   // Navigation View & Stack
@@ -306,7 +307,13 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       name: 'Jeu',
       icon: 'game',
       items: [
-        { id: 'game-ms', label: 'Memory Stick™ (Jeux)', sublabel: `${gamesList.length} titre UMD`, icon: 'game', type: 'folder' },
+        {
+          id: 'game-1',
+          label: 'Mini Jeu Rétro',
+          sublabel: 'PlayStation Portable Studio • Casse-briques',
+          icon: 'game',
+          type: 'game' as const,
+        },
       ],
     },
     {
@@ -442,11 +449,34 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     setIsOptionsOpen(false);
   };
 
+  // Sortie propre et synchrone du mini-jeu (Touche ◯ / Échap) (Chantier 3)
+  const handleExitGame = () => {
+    try { sound.playBack(); } catch (e) {}
+    setViewMode('menu');
+    const gameCatIndex = categories.findIndex((c) => c.id === 'game');
+    if (gameCatIndex !== -1) {
+      setCatIndex(gameCatIndex);
+    }
+    setItemIndex(0);
+    setSubItemIndex(0);
+    stateRef.current.viewMode = 'menu';
+    stateRef.current.catIndex = gameCatIndex !== -1 ? gameCatIndex : stateRef.current.catIndex;
+    stateRef.current.itemIndex = 0;
+    stateRef.current.subItemIndex = 0;
+    setNavStack([]);
+  };
+
   // Pop state stack (Touche Rond ◯ / Échap / Backspace)
   // Quitte le lecteur pour revenir à la liste XMB SANS COUPER LE SON en arrière-plan
   const popState = () => {
     sound.playBack();
     const current = stateRef.current;
+
+    // Sortie propre et immédiate de l'écran de jeu
+    if (current.viewMode === 'game_screen') {
+      handleExitGame();
+      return;
+    }
 
     // Si le volet latéral d'options est ouvert, le fermer en priorité
     if (current.isOptionsOpen) {
@@ -701,6 +731,14 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     }
   };
 
+  // Déclencheur dédié et autonome pour lancer le mini-jeu proprement (Chantier 1 & 2)
+  const launchRetroGame = (gameItem?: any) => {
+    try { sound.playEnter(); } catch (e) {} // Ne doit jamais bloquer l'exécution
+    const targetGame = gameItem || gamesList[0] || { id: 'game-1', title: 'Mini Jeu Rétro' };
+    setCurrentGame(targetGame);
+    pushState('game_screen', 'game');
+  };
+
   // Touche Croix (✕ / Entrée) : Entrer dans un dossier ou lancer la lecture plein écran
   const handleValidate = (overrideIndex?: number) => {
     const s = stateRef.current;
@@ -758,12 +796,8 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         return;
       }
       if (s.subListType === 'game') {
-        const selectedGame = s.gamesList[activeSubIndex];
-        if (selectedGame) {
-          pauseTrack();
-          setCurrentGame(selectedGame);
-          pushState('game_screen', 'game');
-        }
+        const selectedGame = s.gamesList[activeSubIndex] || s.gamesList[0];
+        launchRetroGame(selectedGame);
         return;
       }
       if (s.subListType === 'video') {
@@ -798,13 +832,14 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       if (currentItem.id === 'video-ms') targetType = 'video';
       if (currentItem.id === 'game-ms') targetType = 'game';
       pushState('sublist', targetType);
+    } else if (currentItem.id === 'game-1' || currentItem.type === 'game') {
+      const selectedGame = s.gamesList.find((g) => g.id === currentItem.id) || s.gamesList[0] || currentItem;
+      launchRetroGame(selectedGame);
+      return;
     } else if (currentItem.type === 'search') {
       setIsSearchModalOpen(true);
     } else if (currentItem.id === 'music-now') {
       if (currentTrack) {
-        pushState('player');
-      } else if (itunesTracks.length > 0) {
-        playTrack(itunesTracks[0], itunesTracks);
         pushState('player');
       }
     } else if (currentItem.id === 'search-daft-punk') {
@@ -823,12 +858,6 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     }
   };
 
-  // Sélection explicite et immédiate par clic souris / tap tactile (Chantier 1)
-  const handleItemSelect = (index: number) => {
-    stateRef.current.itemIndex = index;
-    setItemIndex(index);
-    handleValidate(index);
-  };
 
   // Touche Triangle (△ / Touche A) : Ouvrir / fermer le volet latéral d'options contextuelles
   const handleOptions = () => {
@@ -841,9 +870,9 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
   // Touche Carré (▢ / Touche Espace) : Déclencher immédiatement la bascule Play / Pause
   const handleSquare = () => {
-    sound.playTick();
     const s = stateRef.current;
     if (s.viewMode === 'video_player') {
+      sound.playTick();
       triggerVideoHUD();
       if (videoRef.current) {
         if (videoRef.current.paused) {
@@ -857,12 +886,13 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       return;
     }
 
-    // Bascule Play / Pause audio immédiate partout (lecteur, menu ou sous-dossier)
-    if (s.currentTrack) {
-      togglePlay();
-    } else if (itunesTracks.length > 0) {
-      playTrack(itunesTracks[0], itunesTracks);
+    // Si aucune piste n'a été sélectionnée manuellement par l'utilisateur, ne rien faire
+    if (!s.currentTrack) {
+      return;
     }
+
+    sound.playTick();
+    togglePlay();
   };
 
   // Execute iTunes Search
@@ -878,8 +908,15 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
   // External commands listener (from invisible hotspots & gamepad)
   useEffect(() => {
+    if (viewMode === 'game_screen') {
+      // Le jeu a le contrôle exclusif de toutes les entrées.
+      // XMBMenu ne doit intercepter AUCUNE flèche, AUCUN bouton directionnel.
+      return;
+    }
+
     if (!externalCommand) return;
     const { action } = externalCommand;
+
     if (action === 'up' || action === 'down' || action === 'left' || action === 'right') {
       handleNav(action);
     } else if (action === 'trigger_l') {
@@ -898,12 +935,23 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       handleHome();
     } else if (action === 'select') {
       handleSelect();
+    } else if (action === 'start') {
+      togglePlay();
+    } else if (action === 'vol_up') {
+      adjustVolume(0.05);
+    } else if (action === 'vol_down') {
+      adjustVolume(-0.05);
     }
-  }, [externalCommand]);
+  }, [externalCommand, viewMode]);
 
   // Global Keyboard listener
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (viewMode === 'game_screen' || stateRef.current.viewMode === 'game_screen') {
+        // Le jeu a le contrôle exclusif de toutes les entrées.
+        // XMBMenu ne doit intercepter AUCUNE flèche, AUCUN bouton directionnel.
+        return;
+      }
       if (stateRef.current.isSearchModalOpen && e.target instanceof HTMLInputElement) return;
 
       const key = e.key.toLowerCase();
@@ -949,7 +997,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [viewMode]);
 
   return (
     <div className="relative w-full h-full select-none overflow-hidden text-white font-['Inter',sans-serif]">
@@ -1038,7 +1086,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       {/* 2. DEDICATED FULLSCREEN GAME ENGINE (RETRO BRICK BREAKER) */}
       {viewMode === 'game_screen' ? (
         <div className="absolute inset-0 z-20 overflow-hidden bg-black animate-fade-in">
-          <RetroBrickGame onExit={popState} externalCommand={externalCommand} />
+          <RetroBrickGame onExit={handleExitGame} externalCommand={externalCommand} />
         </div>
       ) : viewMode === 'video_player' && currentVideo ? (
         /* 3. DEDICATED FULLSCREEN VIDEO PLAYER (LECTEUR VIDÉO MP4 PLEIN ÉCRAN) */
@@ -1307,15 +1355,31 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
               >
                 {activeItems.map((item, idx) => {
                   const isSelected = idx === itemIndex;
+                  const isGame = item.id === 'game-1' || item.type === 'game';
                   return (
                     <div
                       key={item.id}
+                      onPointerDown={(e) => {
+                        if (isGame) {
+                          e.stopPropagation();
+                          setItemIndex(idx);
+                          stateRef.current.itemIndex = idx;
+                          launchRetroGame(item);
+                        }
+                      }}
                       onClick={(e) => {
                         e.stopPropagation();
                         setItemIndex(idx);
-                        handleItemSelect(idx);
+                        stateRef.current.itemIndex = idx;
+                        if (isGame) {
+                          launchRetroGame(item);
+                        } else {
+                          handleValidate(idx);
+                        }
                       }}
-                      className={`h-11 flex items-center px-3 gap-3 rounded-lg cursor-pointer transition-all duration-200 ${
+                      className={`h-11 flex items-center px-3 gap-3 rounded-lg cursor-pointer select-none transition-all duration-200 ${
+                        isGame ? 'relative z-30' : ''
+                      } ${
                         isSelected
                           ? 'bg-gradient-to-r from-white/25 via-white/10 to-transparent border-l-3 border-white shadow-[0_0_15px_rgba(255,255,255,0.2)]'
                           : 'opacity-40 hover:opacity-75'
@@ -1326,6 +1390,8 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                           '📁'
                         ) : item.type === 'search' ? (
                           '🔍'
+                        ) : item.icon === 'game' ? (
+                          '🎮'
                         ) : (
                           '🎵'
                         )}
@@ -1411,15 +1477,19 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                     return (
                       <div
                         key={game.id}
+                        onPointerDown={(e) => {
+                          e.stopPropagation();
+                          setSubItemIndex(idx);
+                          stateRef.current.subItemIndex = idx;
+                          launchRetroGame(game);
+                        }}
                         onClick={(e) => {
                           e.stopPropagation();
                           setSubItemIndex(idx);
                           stateRef.current.subItemIndex = idx;
-                          pauseTrack();
-                          setCurrentGame(game);
-                          pushState('game_screen', 'game');
+                          launchRetroGame(game);
                         }}
-                        className={`h-12 flex items-center px-3 gap-2.5 rounded-lg cursor-pointer transition-all duration-200 ${
+                        className={`h-12 flex items-center px-3 gap-2.5 rounded-lg cursor-pointer select-none relative z-30 transition-all duration-200 ${
                           isSelected
                             ? 'bg-gradient-to-r from-white/30 via-white/15 to-transparent border-l-3 border-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.3)]'
                             : 'opacity-45 hover:opacity-75'
@@ -1466,10 +1536,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                             e.stopPropagation();
                             setSubItemIndex(idx);
                             stateRef.current.subItemIndex = idx;
-                            pauseTrack();
-                            setCurrentVideo(video);
-                            setIsVideoPlaying(true);
-                            pushState('video_player', 'video');
+                            handleValidate(idx);
                           }}
                           className={`h-12 flex items-center px-3 gap-2.5 rounded-lg cursor-pointer transition-all duration-200 ${
                             isSelected
@@ -1540,8 +1607,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                           e.stopPropagation();
                           setSubItemIndex(idx);
                           stateRef.current.subItemIndex = idx;
-                          playTrack(track, currentSubList);
-                          pushState('player');
+                          handleValidate(idx);
                         }}
                         className={`h-12 flex items-center px-3 gap-2.5 rounded-lg cursor-pointer transition-all duration-200 ${
                           isSelected

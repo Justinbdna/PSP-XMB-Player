@@ -1,9 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { sound } from '../../services/sound';
+import { useAudio } from '../AudioEngine';
 
 interface RetroBrickGameProps {
   onExit: () => void;
-  externalCommand?: { action: string; timestamp: number } | null;
+  externalCommand?: { action: string; timestamp: number } | string | null;
 }
 
 interface Brick {
@@ -15,6 +16,12 @@ interface Brick {
   points: number;
   alive: boolean;
 }
+
+const TRACKS = [
+  { id: 'master', label: 'Général' },
+  { id: 'bgm', label: 'Musique' },
+  { id: 'sfx', label: 'Bruitages' },
+];
 
 interface Particle {
   x: number;
@@ -31,6 +38,115 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
   externalCommand,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const { setVolume: setEngineVolume } = useAudio();
+
+  // 1. États de volume stricts (entiers 0 à 100) :
+  const [selectedTrack, setSelectedTrack] = useState<number>(0); // 0: Général, 1: Musique, 2: Bruitages
+  const [masterVol, setMasterVol] = useState<number>(100);
+  const [bgmVol, setBgmVol] = useState<number>(85);
+  const [sfxVol, setSfxVol] = useState<number>(100);
+  const [isMixerOpen, setIsMixerOpen] = useState<boolean>(false);
+
+  const isMixerOpenRef = useRef<boolean>(isMixerOpen);
+  isMixerOpenRef.current = isMixerOpen;
+  const lastExternalCommandRef = useRef<unknown>(null);
+
+  // Réinitialisation du volume des bruitages à la sortie
+  useEffect(() => {
+    return () => {
+      sound.setVolume(1.0);
+    };
+  }, []);
+
+  const applyAudioSync = (m: number, b: number, s: number) => {
+    const normBgm = (m / 100) * (b / 100);
+    const normSfx = (m / 100) * (s / 100);
+    setEngineVolume(normBgm, false); // Ne pas afficher l'OSD console
+    try { sound.setVolume(normSfx); } catch (e) {}
+  };
+
+  // 3. Fonction arithmétique stepVolume par pas stricts de 5 % :
+  const stepVolume = (trackIndex: number, delta: number) => {
+    if (trackIndex === 0) {
+      setMasterVol(prev => {
+        const next = Math.max(0, Math.min(100, prev + delta));
+        applyAudioSync(next, bgmVol, sfxVol);
+        return next;
+      });
+    } else if (trackIndex === 1) {
+      setBgmVol(prev => {
+        const next = Math.max(0, Math.min(100, prev + delta));
+        applyAudioSync(masterVol, next, sfxVol);
+        return next;
+      });
+    } else if (trackIndex === 2) {
+      setSfxVol(prev => {
+        const next = Math.max(0, Math.min(100, prev + delta));
+        applyAudioSync(masterVol, bgmVol, next);
+        return next;
+      });
+    }
+  };
+
+  // 2. Routeur centralisé dispatchMixerAction :
+  const dispatchMixerAction = (action: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT' | 'CLOSE' | 'ENTER') => {
+    switch (action) {
+      case 'UP':
+        try { sound.playCursor(); } catch (e) {}
+        setSelectedTrack(prev => (prev > 0 ? prev - 1 : 2)); // Boucle infinie 0 -> 2 -> 1 -> 0
+        break;
+      case 'DOWN':
+        try { sound.playCursor(); } catch (e) {}
+        setSelectedTrack(prev => (prev < 2 ? prev + 1 : 0));
+        break;
+      case 'LEFT':
+        try { sound.playCursor(); } catch (e) {}
+        stepVolume(selectedTrack, -5); // Strictement -5%
+        break;
+      case 'RIGHT':
+        try { sound.playCursor(); } catch (e) {}
+        stepVolume(selectedTrack, +5); // Strictement +5%
+        break;
+      case 'ENTER':
+        try { sound.playEnter(); } catch (e) {}
+        break;
+      case 'CLOSE':
+        try { sound.playBack(); } catch (e) {}
+        setIsMixerOpen(false);
+        break;
+    }
+  };
+
+  // Sélection rapide d'une piste au clic
+  const selectTrack = (idx: number) => {
+    setSelectedTrack(idx);
+    try { sound.playCursor(); } catch (e) {}
+  };
+
+  // Réglage direct au clic / glisser sur la jauge
+  const setTrackVolumeDirect = (
+    channelIndex: number,
+    clientX: number,
+    gaugeElement: HTMLElement
+  ) => {
+    const rect = gaugeElement.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const pct = Math.max(
+      0,
+      Math.min(100, Math.round(((clientX - rect.left) / rect.width) * 20) * 5)
+    );
+    selectTrack(channelIndex);
+    if (channelIndex === 0) {
+      setMasterVol(pct);
+      applyAudioSync(pct, bgmVol, sfxVol);
+    } else if (channelIndex === 1) {
+      setBgmVol(pct);
+      applyAudioSync(masterVol, pct, sfxVol);
+    } else if (channelIndex === 2) {
+      setSfxVol(pct);
+      applyAudioSync(masterVol, bgmVol, pct);
+    }
+  };
 
   const [highScore, setHighScore] = useState<number>(() => {
     try {
@@ -94,7 +210,7 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
   };
 
   const startNewGame = () => {
-    sound.playEnter();
+    try { sound.playEnter(); } catch (e) {}
     const g = gameRef.current;
     g.state = 'playing';
     g.paddleX = 208;
@@ -102,27 +218,34 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
     g.ballX = 240;
     g.ballY = paddleY - g.ballRadius - 1;
     g.ballAttached = false;
-    g.ballVx = (Math.random() > 0.5 ? 1 : -1) * (2.4 + Math.random() * 0.8);
-    g.ballVy = -3.0;
+    g.ballVx = (Math.random() > 0.5 ? 1 : -1) * 3;
+    g.ballVy = -4;
     g.bricks = initBricks();
     g.particles = [];
     g.score = 0;
     g.lives = 3;
   };
 
-  const launchBall = () => {
+  const launchBall = useCallback(() => {
+    if (isMixerOpenRef.current) return;
     const g = gameRef.current;
     if (g.state === 'ready' || g.state === 'gameover' || g.state === 'victory') {
       startNewGame();
+      g.ballAttached = false;
+      g.ballVx = (Math.random() > 0.5 ? 1 : -1) * 3;
+      g.ballVy = -4;
+      try { sound.playEnter(); } catch (e) {}
       return;
     }
-    if (g.state === 'playing' && g.ballAttached) {
-      g.ballAttached = false;
-      sound.playEnter();
-      g.ballVx = (Math.random() > 0.5 ? 1 : -1) * (2.4 + Math.random() * 0.8);
-      g.ballVy = -3.2;
+    if (g.state === 'playing') {
+      if (g.ballAttached) {
+        g.ballAttached = false;
+        try { sound.playEnter(); } catch (e) {}
+        g.ballVx = (Math.random() > 0.5 ? 1 : -1) * 3;
+        g.ballVy = -4;
+      }
     }
-  };
+  }, []);
 
   const spawnParticles = (x: number, y: number, color: string) => {
     for (let i = 0; i < 8; i++) {
@@ -142,6 +265,7 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
 
   // Mise à jour fluide de la position de la raquette au trackpad / souris / tactile
   const updatePaddlePosition = (clientX: number) => {
+    if (isMixerOpenRef.current) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -170,36 +294,75 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
   };
 
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (isMixerOpenRef.current) return;
     updatePaddlePosition(e.clientX);
     launchBall();
   };
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (isMixerOpenRef.current) return;
     updatePaddlePosition(e.clientX);
     launchBall();
   };
 
-  // Contrôles clavier
+  // 1. Écouteur Clavier du Mixeur (prioritaire et capturant) :
   useEffect(() => {
+    if (!isMixerOpen) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      // Empêcher toute fuite vers le navigateur ou le parent
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Enter', 'Escape', 'Tab'].includes(e.code) || ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
+
+      if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'z') dispatchMixerAction('UP');
+      else if (e.key === 'ArrowDown' || e.key === 's') dispatchMixerAction('DOWN');
+      else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'q') dispatchMixerAction('LEFT');
+      else if (e.key === 'ArrowRight' || e.key === 'd') dispatchMixerAction('RIGHT');
+      else if (e.key === 'Enter') dispatchMixerAction('ENTER');
+      else if (e.key === 'Escape' || e.key === 'Tab') dispatchMixerAction('CLOSE');
+    };
+
+    window.addEventListener('keydown', onKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
+  }, [isMixerOpen, selectedTrack, masterVol, bgmVol, sfxVol]);
+
+  // Contrôles clavier en jeu (quand le mixeur est fermé)
+  useEffect(() => {
+    if (isMixerOpen) return;
+
     const onKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
-      if (e.key === 'ArrowLeft' || key === 'q') {
+
+      if (key === 'tab' || key === 'v' || key === 'p') {
+        e.preventDefault();
+        e.stopPropagation();
+        try { sound.playOption(); } catch (err) {}
+        setIsMixerOpen(true);
+        return;
+      }
+
+      if (e.key === 'ArrowLeft' || key === 'q' || key === 'a') {
+        e.preventDefault();
         gameRef.current.keys.left = true;
       } else if (e.key === 'ArrowRight' || key === 'd') {
+        e.preventDefault();
         gameRef.current.keys.right = true;
       } else if (e.key === 'Enter' || key === 'x' || e.key === ' ') {
         e.preventDefault();
         launchBall();
       } else if (e.key === 'Escape' || key === 'o' || e.key === 'Backspace') {
         e.preventDefault();
-        sound.playBack();
+        try { sound.playBack(); } catch (err) {}
         onExit();
       }
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
-      if (e.key === 'ArrowLeft' || key === 'q') {
+      if (e.key === 'ArrowLeft' || key === 'q' || key === 'a') {
         gameRef.current.keys.left = false;
       } else if (e.key === 'ArrowRight' || key === 'd') {
         gameRef.current.keys.right = false;
@@ -212,35 +375,58 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [onExit]);
+  }, [isMixerOpen, onExit, launchBall]);
 
-  // Commandes externes issues des boutons matériels PSP
+  // 2. Écouteur Commandes D-Pad / PSP (externalCommand) :
   useEffect(() => {
     if (!externalCommand) return;
-    const { action } = externalCommand;
+    if (lastExternalCommandRef.current === externalCommand) return;
+    lastExternalCommandRef.current = externalCommand;
 
-    if (action === 'left') {
-      gameRef.current.paddleX = Math.max(10, gameRef.current.paddleX - 28);
-      if (gameRef.current.ballAttached) {
-        gameRef.current.ballX = gameRef.current.paddleX + gameRef.current.paddleW / 2;
+    const rawCmd = typeof externalCommand === 'string' ? externalCommand : externalCommand.action;
+    const cmd = rawCmd.toLowerCase();
+
+    if (!isMixerOpen) {
+      if (cmd === 'select' || cmd === 'start') {
+        try { sound.playOption(); } catch (e) {}
+        setIsMixerOpen(true);
+      } else if (cmd === 'vol_up') {
+        stepVolume(0, +5);
+      } else if (cmd === 'vol_down') {
+        stepVolume(0, -5);
+      } else if (cmd === 'left' || cmd === 'dpad_left') {
+        gameRef.current.paddleX = Math.max(10, gameRef.current.paddleX - 28);
+        if (gameRef.current.ballAttached) {
+          gameRef.current.ballX = gameRef.current.paddleX + gameRef.current.paddleW / 2;
+        }
+        try { sound.playCursor(); } catch (e) {}
+      } else if (cmd === 'right' || cmd === 'dpad_right') {
+        gameRef.current.paddleX = Math.min(
+          480 - 10 - gameRef.current.paddleW,
+          gameRef.current.paddleX + 28
+        );
+        if (gameRef.current.ballAttached) {
+          gameRef.current.ballX = gameRef.current.paddleX + gameRef.current.paddleW / 2;
+        }
+        try { sound.playCursor(); } catch (e) {}
+      } else if (cmd === 'cross') {
+        launchBall();
+      } else if (cmd === 'circle' || cmd === 'home') {
+        try { sound.playBack(); } catch (e) {}
+        onExit();
       }
-      sound.playTick();
-    } else if (action === 'right') {
-      gameRef.current.paddleX = Math.min(
-        480 - 10 - gameRef.current.paddleW,
-        gameRef.current.paddleX + 28
-      );
-      if (gameRef.current.ballAttached) {
-        gameRef.current.ballX = gameRef.current.paddleX + gameRef.current.paddleW / 2;
-      }
-      sound.playTick();
-    } else if (action === 'cross') {
-      launchBall();
-    } else if (action === 'circle') {
-      sound.playBack();
-      onExit();
+      return;
     }
-  }, [externalCommand, onExit]);
+
+    // Si le mixeur est ouvert :
+    if (cmd === 'up' || cmd === 'dpad_up') dispatchMixerAction('UP');
+    else if (cmd === 'down' || cmd === 'dpad_down') dispatchMixerAction('DOWN');
+    else if (cmd === 'left' || cmd === 'dpad_left' || cmd === 'vol_down') dispatchMixerAction('LEFT');
+    else if (cmd === 'right' || cmd === 'dpad_right' || cmd === 'vol_up') dispatchMixerAction('RIGHT');
+    else if (cmd === 'cross') dispatchMixerAction('ENTER');
+    else if (cmd === 'circle' || cmd === 'select' || cmd === 'start') dispatchMixerAction('CLOSE');
+    else if (cmd === 'home') onExit();
+  }, [externalCommand, isMixerOpen, selectedTrack, masterVol, bgmVol, sfxVol]);
 
   // Boucle de rendu Canvas 2D (480x272 pixels natifs PSP)
   useEffect(() => {
@@ -259,8 +445,8 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
       const H = 272;
       const paddleY = H - 24;
 
-      // 1. Mise à jour de la logique physique
-      if (g.state === 'playing') {
+      // 1. Mise à jour de la logique physique (strictement suspendue si le mixeur est ouvert)
+      if (g.state === 'playing' && !isMixerOpenRef.current) {
         // Déplacement raquette au clavier
         const paddleSpeed = 5.2;
         if (g.keys.left) {
@@ -380,14 +566,16 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
         }
       }
 
-      // Mise à jour des particules
-      for (let i = g.particles.length - 1; i >= 0; i--) {
-        const p = g.particles[i];
-        p.x += p.vx;
-        p.y += p.vy;
-        p.alpha -= 0.035;
-        if (p.alpha <= 0) {
-          g.particles.splice(i, 1);
+      // Mise à jour des particules (strictement suspendue si le mixeur est ouvert)
+      if (!isMixerOpenRef.current) {
+        for (let i = g.particles.length - 1; i >= 0; i--) {
+          const p = g.particles[i];
+          p.x += p.vx;
+          p.y += p.vy;
+          p.alpha -= 0.035;
+          if (p.alpha <= 0) {
+            g.particles.splice(i, 1);
+          }
         }
       }
 
@@ -590,10 +778,86 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
         className="w-full h-full object-contain bg-black cursor-pointer touch-none"
       />
 
-      {/* Ligne d'aide unique et centrée au bas de l'écran (Chantier 2) */}
+      {/* Ligne d'aide unique et épurée au bas de l'écran (Chantier 1) */}
       <div className="absolute bottom-1.5 left-0 right-0 flex items-center justify-center text-[8.5px] font-mono text-white/60 pointer-events-none z-10 tracking-wide">
-        [Trackpad / Souris] Déplacer • [Clic / ✕] Lancer • [◯] Quitter
+        [Trackpad] Déplacer • [Clic / ✕] Lancer • [SELECT] Mixeur • [◯] Quitter
       </div>
+
+      {/* Overlay Rétro Mixeur Multipiste - Format Panoramique Glassmorphism Sobre */}
+      {isMixerOpen && (
+        <div
+          className="absolute inset-0 z-30 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in p-4"
+          onClick={() => {
+            setIsMixerOpen(false);
+            sound.playBack();
+          }}
+        >
+          <div
+            className="w-[370px] sm:w-[390px] py-3.5 px-5 bg-black/50 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl text-white select-none"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* En-tête sobre */}
+            <div className="mb-2.5">
+              <h3 className="text-sm font-medium tracking-wide text-white/90">Mixeur audio</h3>
+            </div>
+
+            {/* Pistes et curseurs épurés */}
+            <div className="space-y-1">
+              {TRACKS.map((t, idx) => {
+                const isSelected = selectedTrack === idx;
+                const val = idx === 0 ? masterVol : idx === 1 ? bgmVol : sfxVol;
+                return (
+                  <div
+                    key={t.id}
+                    onClick={() => selectTrack(idx)}
+                    className={`flex items-center transition-all ${
+                      isSelected
+                        ? 'bg-white/5 rounded-lg py-1 px-2 border border-white/5 text-white'
+                        : 'py-1 px-2 border border-transparent text-white/70 hover:bg-white/[0.02]'
+                    }`}
+                  >
+                    {/* Libellé : text-xs text-white/70 w-16 */}
+                    <span className={`text-xs w-16 truncate ${isSelected ? 'text-white font-medium' : 'text-white/70'}`}>
+                      {t.label}
+                    </span>
+
+                    {/* Jauge : h-1 bg-white/15 rounded-full overflow-hidden flex-1 cursor-pointer mx-3 */}
+                    <div
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                        setTrackVolumeDirect(idx, e.clientX, e.currentTarget);
+                      }}
+                      onPointerMove={(e) => {
+                        if (e.buttons === 1) {
+                          e.stopPropagation();
+                          setTrackVolumeDirect(idx, e.clientX, e.currentTarget);
+                        }
+                      }}
+                      className="relative h-1 bg-white/15 rounded-full overflow-hidden flex-1 cursor-pointer mx-3"
+                    >
+                      <div
+                        className="h-full bg-white/90 rounded-full transition-all duration-75 shadow-[0_0_6px_rgba(255,255,255,0.4)]"
+                        style={{ width: `${val}%` }}
+                      />
+                    </div>
+
+                    {/* Pourcentage : text-xs font-mono text-white/60 w-8 text-right */}
+                    <span className="text-xs font-mono text-white/60 w-8 text-right">
+                      {val}%
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Pied de fenêtre minimaliste sur une seule ligne */}
+            <p className="text-[10px] text-white/40 tracking-wider font-mono text-center pt-2 mt-2 border-t border-white/5">
+              ▲/▼ Piste • ◄/► Volume • [◯ / SELECT] Fermer
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

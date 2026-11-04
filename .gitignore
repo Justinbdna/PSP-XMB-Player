@@ -23,16 +23,38 @@ dist-ssr
 *.sln
 *.sw?
 
-# Médias locaux sous droits d'auteur
+# --- AUDIO : Tout ignorer par défaut ---
 public/audio/*.mp3
 public/audio/*.m4a
 public/audio/*.wav
 public/audio/*.aac
 public/audio/*.flac
-public/videos/*.mp4
 
-# Conserver l'arborescence et les pochettes extraites légères
+# Exceptions Audio autorisées sur GitHub :
+!public/audio/01 Gatitas.mp3
+!public/audio/13 Kiss of Life.mp3
+!public/audio/Ariana Grande - Into You (Audio).mp3
+!public/audio/Ayra Starr - Rush.mp3
+!public/audio/Bad Bunny, Omar Courtz & Dei V - VELDÁ.mp3
+!public/audio/Bad Bunny, Omar Courtz & Dei V - *ELD*.mp3
+!public/audio/Beyoncé - BREAK MY SOUL.mp3
+!public/audio/Beyonc* - BREAK MY SOUL.mp3
+!public/audio/Briyney Spears - I'm A Slave 4 U.mp3
+!public/audio/Tears For Fears - Everybody Wants to Rule the World.mp3
+!public/audio/Tears For Fears - Everybody Wants *
+
+# Conserver l'arborescence et les jaquettes
 !public/audio/covers/
 !public/audio/.gitkeep
-!public/videos/.gitkeep
 
+# --- VIDÉOS : Tout ignorer par défaut ---
+public/videos/*.mp4
+
+# Exceptions Vidéo autorisées sur GitHub :
+!public/videos/8belial x Bad Gyal - ORILLA*.mp4
+!public/videos/Beyoncé - Baby Boy*.mp4
+!public/videos/Beyonc* - Baby Boy*.mp4
+!public/videos/Lady Gaga - Poker Face*.mp4
+!public/videos/THEODORA - MON BÉBÉ*.mp4
+!public/videos/THEODORA - MON*B*B*.mp4
+!public/videos/.gitkeep

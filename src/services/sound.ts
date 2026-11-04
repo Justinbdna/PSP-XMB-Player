@@ -2,6 +2,7 @@
 class SoundService {
   private ctx: AudioContext | null = null;
   private isMuted: boolean = false;
+  private volume: number = 1.0;
 
   private getContext(): AudioContext {
     if (!this.ctx) {
@@ -12,6 +13,14 @@ class SoundService {
       this.ctx.resume();
     }
     return this.ctx;
+  }
+
+  public setVolume(vol: number) {
+    this.volume = Math.max(0, Math.min(1, Math.round(vol * 100) / 100));
+  }
+
+  public getVolume(): number {
+    return this.volume;
   }
 
   public setMuted(muted: boolean) {
@@ -29,7 +38,7 @@ class SoundService {
 
   // Authentic Sony PSP XMB navigation tick
   public playTick() {
-    if (this.isMuted) return;
+    if (this.isMuted || this.volume <= 0.001) return;
     try {
       const ctx = this.getContext();
       const osc = ctx.createOscillator();
@@ -39,7 +48,7 @@ class SoundService {
       osc.frequency.setValueAtTime(1200, ctx.currentTime);
       osc.frequency.exponentialRampToValueAtTime(700, ctx.currentTime + 0.04);
 
-      gain.gain.setValueAtTime(0.25, ctx.currentTime);
+      gain.gain.setValueAtTime(0.25 * this.volume, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.04);
 
       osc.connect(gain);
@@ -52,9 +61,13 @@ class SoundService {
     }
   }
 
+  public playCursor() {
+    this.playTick();
+  }
+
   // Authentic Sony PSP validation chime (✕ button)
   public playEnter() {
-    if (this.isMuted) return;
+    if (this.isMuted || this.volume <= 0.001) return;
     try {
       const ctx = this.getContext();
       const now = ctx.currentTime;
@@ -64,7 +77,7 @@ class SoundService {
       const gain1 = ctx.createGain();
       osc1.type = 'sine';
       osc1.frequency.setValueAtTime(1046.5, now); // C6
-      gain1.gain.setValueAtTime(0.2, now);
+      gain1.gain.setValueAtTime(0.2 * this.volume, now);
       gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
       osc1.connect(gain1);
       gain1.connect(ctx.destination);
@@ -76,7 +89,7 @@ class SoundService {
       const gain2 = ctx.createGain();
       osc2.type = 'sine';
       osc2.frequency.setValueAtTime(1318.5, now + 0.04); // E6
-      gain2.gain.setValueAtTime(0.25, now + 0.04);
+      gain2.gain.setValueAtTime(0.25 * this.volume, now + 0.04);
       gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
       osc2.connect(gain2);
       gain2.connect(ctx.destination);
@@ -89,7 +102,7 @@ class SoundService {
 
   // Authentic Sony PSP cancel / back chime (◯ button)
   public playBack() {
-    if (this.isMuted) return;
+    if (this.isMuted || this.volume <= 0.001) return;
     try {
       const ctx = this.getContext();
       const now = ctx.currentTime;
@@ -101,7 +114,7 @@ class SoundService {
       osc.frequency.setValueAtTime(880, now); // A5
       osc.frequency.exponentialRampToValueAtTime(440, now + 0.16); // A4
 
-      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.setValueAtTime(0.2 * this.volume, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
 
       osc.connect(gain);
@@ -116,7 +129,7 @@ class SoundService {
 
   // Options / Triangle sound
   public playOption() {
-    if (this.isMuted) return;
+    if (this.isMuted || this.volume <= 0.001) return;
     try {
       const ctx = this.getContext();
       const now = ctx.currentTime;
@@ -128,7 +141,7 @@ class SoundService {
       osc.frequency.setValueAtTime(1500, now);
       osc.frequency.linearRampToValueAtTime(1800, now + 0.08);
 
-      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.setValueAtTime(0.18 * this.volume, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
 
       osc.connect(gain);

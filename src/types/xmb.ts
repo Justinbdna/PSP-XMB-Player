@@ -45,7 +45,7 @@ export interface XMBItem {
   label: string;
   sublabel?: string;
   icon: string;
-  type: 'action' | 'track' | 'folder' | 'setting' | 'search';
+  type: 'action' | 'track' | 'folder' | 'setting' | 'search' | 'game';
   payload?: any;
 }
 
