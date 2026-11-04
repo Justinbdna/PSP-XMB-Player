@@ -402,6 +402,24 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     };
   });
 
+  // Émission de l'état XMB pour la suite DevTools Staging (Chantier 3)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('psp_xmb_debug', {
+          detail: {
+            viewMode,
+            catIndex,
+            itemIndex,
+            subItemIndex,
+            categoryName: activeCategory?.name || 'Inconnu',
+            subListType,
+          },
+        })
+      );
+    }
+  }, [viewMode, catIndex, itemIndex, subItemIndex, activeCategory, subListType]);
+
   // Push current frame onto navigation state stack
   const pushState = (
     newView: XMBViewMode,

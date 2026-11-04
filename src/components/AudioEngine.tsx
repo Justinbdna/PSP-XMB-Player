@@ -14,6 +14,7 @@ interface AudioContextType {
   audioError: string | null;
   analyser: AnalyserNode | null;
   isRealDSP: boolean;
+  audioContextState: string;
   playlist: Track[];
   setPlaylist: (tracks: Track[]) => void;
   playTrack: (track: Track, newPlaylist?: Track[]) => void;
@@ -549,6 +550,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         audioError,
         analyser: activeAnalyser,
         isRealDSP,
+        audioContextState: audioCtxRef.current ? audioCtxRef.current.state : 'suspended',
         playlist,
         setPlaylist,
         playTrack,
