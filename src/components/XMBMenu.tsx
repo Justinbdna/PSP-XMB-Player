@@ -92,6 +92,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   const [videoAspectMode, setVideoAspectMode] = useState<'contain' | 'cover'>('contain');
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const hudTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastProcessedCommandTimestampRef = useRef<number>(0);
 
   // Games state
   const [gamesList] = useState<GameItem[]>(gamesData as GameItem[]);
@@ -456,6 +457,10 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     if (nextSubListType) setSubListType(nextSubListType);
     setSubItemIndex(0);
     setIsOptionsOpen(false);
+    stateRef.current.viewMode = newView;
+    if (nextSubListType) stateRef.current.subListType = nextSubListType;
+    stateRef.current.subItemIndex = 0;
+    stateRef.current.isOptionsOpen = false;
   };
 
   // Sortie propre et synchrone du mini-jeu (Touche ◯ / Échap) (Chantier 3)
@@ -520,9 +525,16 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       setItemIndex(last.itemIndex);
       setSubItemIndex(last.subItemIndex);
       if (last.subListType) setSubListType(last.subListType);
+      stateRef.current.viewMode = last.view;
+      stateRef.current.catIndex = last.catIndex;
+      stateRef.current.itemIndex = last.itemIndex;
+      stateRef.current.subItemIndex = last.subItemIndex;
+      if (last.subListType) stateRef.current.subListType = last.subListType;
     } else if (current.viewMode !== 'menu') {
       setViewMode('menu');
       setItemIndex(0);
+      stateRef.current.viewMode = 'menu';
+      stateRef.current.itemIndex = 0;
     }
   };
 
@@ -847,7 +859,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     const currentItem = s.activeItems[activeItemIdx];
     if (!currentItem) return;
 
-    if (currentItem.type === 'folder' || currentItem.id === 'music-ms') {
+    if (currentItem.type === 'folder' || currentItem.id === 'music-ms' || currentItem.id === 'music-itunes') {
       try { sound.playEnter(); } catch (e) {}
       setSubItemIndex(0);
       stateRef.current.subItemIndex = 0;
@@ -941,13 +953,18 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
   // External commands listener (from invisible hotspots & gamepad)
   useEffect(() => {
-    if (viewMode === 'game_screen') {
+    if (stateRef.current.viewMode === 'game_screen') {
       // Le jeu a le contrôle exclusif de toutes les entrées.
       // XMBMenu ne doit intercepter AUCUNE flèche, AUCUN bouton directionnel.
       return;
     }
 
     if (!externalCommand) return;
+    if (externalCommand.timestamp <= lastProcessedCommandTimestampRef.current) {
+      return;
+    }
+    lastProcessedCommandTimestampRef.current = externalCommand.timestamp;
+
     const { action } = externalCommand;
 
     if (action === 'up' || action === 'down' || action === 'left' || action === 'right') {
@@ -975,7 +992,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     } else if (action === 'vol_down') {
       adjustVolume(-0.05);
     }
-  }, [externalCommand, viewMode]);
+  }, [externalCommand]);
 
   // Global Keyboard listener
   useEffect(() => {
@@ -1404,7 +1421,19 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                         e.stopPropagation();
                         setItemIndex(idx);
                         stateRef.current.itemIndex = idx;
-                        if (isGame) {
+                        if (item.type === 'folder' || item.id === 'music-ms' || item.id === 'music-itunes') {
+                          try { sound.playEnter(); } catch (err) {}
+                          setSubItemIndex(0);
+                          stateRef.current.subItemIndex = 0;
+                          let targetType: 'ms' | 'itunes' | 'history' | 'search_results' | 'video' | 'game' | 'theme' | 'music' = 'ms';
+                          if (item.id === 'music-ms') targetType = 'ms';
+                          else if (item.id === 'music-itunes') targetType = 'itunes';
+                          else if (item.id === 'theme-color') targetType = 'theme';
+                          else if (item.id === 'history-list') targetType = 'history';
+                          else if (item.id === 'video-ms') targetType = 'video';
+                          else if (item.id === 'game-ms') targetType = 'game';
+                          pushState('sublist', targetType);
+                        } else if (isGame) {
                           launchRetroGame(item);
                         } else {
                           handleValidate(idx);
