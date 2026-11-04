@@ -19,7 +19,11 @@ export const PSP_CHASSIS_CONFIG = {
   },
 };
 
-export const PSPConsole: React.FC = () => {
+export interface PSPConsoleProps {
+  debugHitboxes?: boolean;
+}
+
+export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false }) => {
   // Initialisation du thème officiel depuis le localStorage ou Novembre par défaut
   const getInitialTheme = (): PSPTheme => {
     try {
@@ -52,8 +56,6 @@ export const PSPConsole: React.FC = () => {
     timestamp: number;
   } | null>(null);
 
-  // Commutateur dynamique pour le mode Debug visuel des Hitboxes (désactivé par défaut)
-  const [debugHitboxes, setDebugHitboxes] = useState<boolean>(false);
 
   const { adjustVolume, togglePlay, showVolumeOSD, volume } = useAudio();
   const [powerOn] = useState<boolean>(true);
@@ -142,20 +144,6 @@ export const PSPConsole: React.FC = () => {
       {/* Background ambient lighting */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(40,55,75,0.18),rgba(0,0,0,0.96))] pointer-events-none"></div>
 
-      {/* ========================================================
-          COMMUTATEUR FLOTTANT DEBUG HITBOXES UI (HORS CONSOLE)
-          ======================================================== */}
-      <button
-        onClick={() => setDebugHitboxes((prev) => !prev)}
-        className={`fixed top-4 right-4 z-50 px-3.5 py-1.5 rounded-full text-xs font-mono font-semibold tracking-wide transition-all duration-200 border cursor-pointer backdrop-blur-md shadow-xl select-none ${
-          debugHitboxes
-            ? 'bg-red-500/20 border-red-500/60 text-red-300 hover:bg-red-500/30 shadow-[0_0_18px_rgba(239,68,68,0.35)]'
-            : 'bg-white/10 border-white/20 text-white/60 hover:bg-white/20 hover:text-white'
-        }`}
-        title="Basculer l'affichage des bordures rouges des hitboxes"
-      >
-        🛠️ Debug Hitboxes : {debugHitboxes ? 'ON' : 'OFF'}
-      </button>
 
       {/* ========================================================
           CONTENEUR GLOBAL AU RATIO FIXE DE LA CONSOLE (~2.36:1)
@@ -440,9 +428,6 @@ export const PSPConsole: React.FC = () => {
         <span><b className="text-amber-400">SELECT / Tab</b> : Visualiseur</span>
         <span>•</span>
         <span><b className="text-white/80">H</b> : PS Home</span>
-        {debugHitboxes && (
-          <span className="text-amber-400 font-mono ml-2">⚠️ Mode Debug Hitboxes Actif</span>
-        )}
       </div>
     </div>
   );
