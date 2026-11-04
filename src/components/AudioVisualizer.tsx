@@ -4,6 +4,7 @@ import { VisualizerMode } from '../types/xmb';
 interface AudioVisualizerProps {
   isPlaying: boolean;
   mode?: VisualizerMode;
+  analyser?: AnalyserNode | null;
   className?: string;
 }
 
@@ -24,6 +25,7 @@ interface BubbleParticle {
 export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
   isPlaying,
   mode = 'bubbles',
+  analyser = null,
   className = '',
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -38,24 +40,38 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
     let t = 0;
     let energy = isPlaying ? 1.0 : 0.0;
 
+    // Synchronisation de la résolution interne du buffer avec getBoundingClientRect()
+    const syncResolution = () => {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const targetW = Math.max(100, Math.round((rect.width || 320) * dpr));
+      const targetH = Math.max(40, Math.round((rect.height || 112) * dpr));
+
+      if (canvas.width !== targetW || canvas.height !== targetH) {
+        canvas.width = targetW;
+        canvas.height = targetH;
+      }
+    };
+    syncResolution();
+
     // --- MODE 1 : INITIALISATION DES BULLES LUMINESCENTES PSP ---
     const bubbleCount = 42;
     const bubbles: BubbleParticle[] = [];
-    const w = canvas.width;
-    const h = canvas.height;
+    const initW = canvas.width;
+    const initH = canvas.height;
 
     for (let i = 0; i < bubbleCount; i++) {
-      const baseX = Math.random() * w;
-      const baseRadius = 2.5 + Math.random() * 6.5;
+      const baseX = Math.random() * initW;
+      const baseRadius = 3.0 + Math.random() * 8.5;
       bubbles.push({
         x: baseX,
         baseX,
-        y: Math.random() * h,
+        y: Math.random() * initH,
         baseRadius,
         radius: baseRadius,
-        speedY: 0.25 + Math.random() * 0.65,
-        swaySpeed: 1.0 + Math.random() * 1.5,
-        swayAmp: 4 + Math.random() * 12,
+        speedY: 0.3 + Math.random() * 0.8,
+        swaySpeed: 1.0 + Math.random() * 1.6,
+        swayAmp: 6 + Math.random() * 16,
         phase: Math.random() * Math.PI * 2,
         isGold: Math.random() < 0.18,
         alpha: 0.35 + Math.random() * 0.5,
@@ -69,27 +85,53 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
     const peaks = new Array(colCount).fill(0);
     const peakHold = new Array(colCount).fill(0);
 
+    // Buffer d'analyse fréquentielle Web Audio API (si disponible)
+    const freqData = analyser ? new Uint8Array(analyser.frequencyBinCount) : null;
+
     const render = () => {
+      syncResolution();
+
       const width = canvas.width;
       const height = canvas.height;
       ctx.clearRect(0, 0, width, height);
 
-      // Gestion de l'énergie et de la décélération fluide (Inertie sans gel brutal)
+      // Gestion de l'énergie et décélération inertielle fluide sans freeze
       const targetEnergy = isPlaying ? 1.0 : 0.0;
       energy += (targetEnergy - energy) * 0.06;
       t += 0.016 * (0.2 + energy * 0.8);
+
+      // Détection du signal réel FFT pour les fichiers locaux
+      let realKick = 0;
+      let hasFFT = false;
+
+      if (isPlaying && analyser && freqData) {
+        try {
+          analyser.getByteFrequencyData(freqData);
+          // Analyse de la bande de basses 40-100 Hz (indices 1 à 4)
+          const k1 = freqData[1] || 0;
+          const k2 = freqData[2] || 0;
+          const k3 = freqData[3] || 0;
+          const k4 = freqData[4] || 0;
+          realKick = (k1 + k2 + k3 + k4) / (4 * 255);
+          if (realKick > 0.04) hasFFT = true;
+        } catch {
+          hasFFT = false;
+        }
+      }
 
       if (mode === 'bubbles') {
         // ========================================================
         // MODE 1 : UNDERWATER BUBBLES (Bulles luminescentes PSP)
         // ========================================================
-        const beat = Math.pow(Math.max(0, Math.sin(t * 4.2)), 3) * 0.45;
-        const pulseFactor = 1 + beat * energy;
+        // Pulsation hybride : kick FFT réel si présent, simulation sinusoïdale sinon
+        const beatFactor = hasFFT
+          ? 1 + realKick * 0.85 * energy
+          : 1 + Math.pow(Math.max(0, Math.sin(t * 4.2)), 3) * 0.45 * energy;
 
         for (let i = 0; i < bubbles.length; i++) {
           const b = bubbles[i];
 
-          // Flottement vertical et oscillation sinusoïdale
+          // Flottement vertical & oscillation sinusoïdale
           b.y -= b.speedY * (0.35 + energy * 0.75);
           b.x = b.baseX + Math.sin(t * b.swaySpeed + b.phase) * b.swayAmp;
 
@@ -102,15 +144,15 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
           }
 
           // Pulsation douce du rayon interpolée au rythme musical
-          const targetR = b.baseRadius * pulseFactor;
-          b.radius += (targetR - b.radius) * 0.15;
+          const targetR = b.baseRadius * beatFactor;
+          b.radius += (targetR - b.radius) * 0.18;
 
-          const r = Math.max(1.2, b.radius);
+          const r = Math.max(1.5, b.radius);
           ctx.save();
 
           // Lueur diffuse
           ctx.shadowColor = b.isGold ? 'rgba(251, 191, 36, 0.75)' : 'rgba(56, 189, 248, 0.75)';
-          ctx.shadowBlur = 8 * (0.4 + energy * 0.6);
+          ctx.shadowBlur = 10 * (0.4 + energy * 0.6);
 
           // Dégradé radial semi-transparent
           const grad = ctx.createRadialGradient(
@@ -158,24 +200,33 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
         // ========================================================
         // MODE 2 : LED MATRIX BLOCKS (Égaliseur à blocs rétro)
         // ========================================================
-        const colGap = 3;
-        const rowGap = 2;
-        const colWidth = Math.max(3, (width - (colCount - 1) * colGap) / colCount);
-        const rowHeight = Math.max(2, (height - 4 - (rowCount - 1) * rowGap) / rowCount);
+        const colGap = 4;
+        const rowGap = 3;
+        const colWidth = Math.max(4, (width - (colCount - 1) * colGap) / colCount);
+        const rowHeight = Math.max(3, (height - 6 - (rowCount - 1) * rowGap) / rowCount);
 
         for (let c = 0; c < colCount; c++) {
-          // Simulation spectrale multi-bandes (Basses, Médiums, Aigus)
-          const bass = c < 6
-            ? Math.pow(Math.max(0, Math.sin(t * 3.5)), 3) * 0.7 + Math.sin(t * 4.8 + c * 0.3) * 0.25
-            : 0;
-          const mids = c >= 6 && c < 14
-            ? (Math.sin(t * 5.2 + c * 0.45) + Math.cos(t * 3.4 - c * 0.3) + 2) * 0.22
-            : 0;
-          const treble = c >= 14
-            ? (Math.sin(t * 8.5 + c * 0.6) + Math.cos(t * 10.2 - c * 0.5) + 2) * 0.22
-            : 0;
+          let raw = 0;
 
-          const raw = Math.min(1, Math.max(0, (bass + mids + treble + 0.1) * energy));
+          if (hasFFT && freqData) {
+            // Lecture du spectre FFT réel pour fichiers locaux
+            const binIdx = Math.min(freqData.length - 1, Math.floor((c / colCount) * (freqData.length * 0.75)));
+            const val = (freqData[binIdx] || 0) / 255;
+            raw = Math.min(1, Math.max(0, val * energy));
+          } else {
+            // Simulation harmonique multi-fréquentielle pour flux distants iTunes
+            const bass = c < 6
+              ? Math.pow(Math.max(0, Math.sin(t * 3.5)), 3) * 0.7 + Math.sin(t * 4.8 + c * 0.3) * 0.25
+              : 0;
+            const mids = c >= 6 && c < 14
+              ? (Math.sin(t * 5.2 + c * 0.45) + Math.cos(t * 3.4 - c * 0.3) + 2) * 0.22
+              : 0;
+            const treble = c >= 14
+              ? (Math.sin(t * 8.5 + c * 0.6) + Math.cos(t * 10.2 - c * 0.5) + 2) * 0.22
+              : 0;
+            raw = Math.min(1, Math.max(0, (bass + mids + treble + 0.1) * energy));
+          }
+
           levels[c] += (raw - levels[c]) * 0.32;
           const activeBlocks = Math.round(levels[c] * rowCount);
 
@@ -195,23 +246,23 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
 
           // Rendu des segments LED du bas vers le haut
           for (let r = 0; r < rowCount; r++) {
-            const y = height - 2 - (r + 1) * (rowHeight + rowGap);
+            const y = height - 3 - (r + 1) * (rowHeight + rowGap);
             const isLit = r < activeBlocks;
             const isPeak = Math.floor(peaks[c]) === r && peaks[c] > 0;
 
             if (isLit) {
               // Dégradé officiel : Ambre chaud (bas) ➔ Ambre doré ➔ Cyan électrique (sommet)
-              let color = 'rgba(245, 158, 11, 0.95)'; // Ambre chaud
+              let color = 'rgba(245, 158, 11, 0.95)';
               if (r >= 5 && r < 8) {
-                color = 'rgba(251, 191, 36, 0.95)'; // Jaune doré
+                color = 'rgba(251, 191, 36, 0.95)';
               } else if (r >= 8) {
-                color = 'rgba(6, 182, 212, 0.98)'; // Cyan électrique
+                color = 'rgba(6, 182, 212, 0.98)';
               }
 
               ctx.fillStyle = color;
               ctx.fillRect(x, y, colWidth, rowHeight);
             } else {
-              // LED éteinte (matrice physique semi-transparente)
+              // LED éteinte (matrice physique)
               ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
               ctx.fillRect(x, y, colWidth, rowHeight);
             }
@@ -232,7 +283,8 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
         // MODE 3 : NEON WAVE / OSCILLOSCOPE (Ligne d'onde continue)
         // ========================================================
         const centerY = height / 2;
-        const maxAmp = (height / 2 - 4) * Math.max(0.08, energy);
+        const kickBoost = hasFFT ? 1 + realKick * 0.9 : 1;
+        const maxAmp = (height / 2 - 8) * Math.max(0.08, energy) * kickBoost;
 
         // Ligne de balayage d'arrière-plan discrète
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
@@ -243,17 +295,17 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // Onde 2 : Harmonique Magenta / Électrique (Seconde couche)
+        // Onde 2 : Harmonique Magenta / Électrique
         ctx.save();
         ctx.strokeStyle = 'rgba(217, 70, 239, 0.85)';
-        ctx.lineWidth = 1.6;
+        ctx.lineWidth = 1.8;
         ctx.shadowColor = '#d946ef';
         ctx.shadowBlur = 8;
         ctx.beginPath();
         for (let x = 0; x <= width; x += 3) {
           const y =
             centerY +
-            (Math.sin(x * 0.05 - t * 6.5 + 1.2) * 0.6 + Math.cos(x * 0.02 + t * 3.2) * 0.4) *
+            (Math.sin(x * 0.045 - t * 6.5 + 1.2) * 0.6 + Math.cos(x * 0.02 + t * 3.2) * 0.4) *
               (maxAmp * 0.75);
           if (x === 0) ctx.moveTo(x, y);
           else ctx.lineTo(x, y);
@@ -261,15 +313,15 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
         ctx.stroke();
         ctx.restore();
 
-        // Onde 3 : Harmonique Haute Fréquence Émeraude (Troisième couche)
+        // Onde 3 : Harmonique Haute Fréquence Émeraude
         ctx.save();
         ctx.strokeStyle = 'rgba(52, 211, 153, 0.75)';
-        ctx.lineWidth = 1.0;
+        ctx.lineWidth = 1.2;
         ctx.shadowColor = '#34d399';
         ctx.shadowBlur = 6;
         ctx.beginPath();
         for (let x = 0; x <= width; x += 3) {
-          const y = centerY + Math.sin(x * 0.11 + t * 8.5) * (maxAmp * 0.35);
+          const y = centerY + Math.sin(x * 0.09 + t * 8.5) * (maxAmp * 0.35);
           if (x === 0) ctx.moveTo(x, y);
           else ctx.lineTo(x, y);
         }
@@ -279,15 +331,15 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
         // Onde 1 : Onde Maîtresse Cyan Néon (#00f0ff)
         ctx.save();
         ctx.strokeStyle = '#00f0ff';
-        ctx.lineWidth = 2.2;
+        ctx.lineWidth = 2.4;
         ctx.shadowColor = '#00f0ff';
-        ctx.shadowBlur = 10;
+        ctx.shadowBlur = 12;
         ctx.beginPath();
         for (let x = 0; x <= width; x += 2) {
           const y =
             centerY +
-            (Math.sin(x * 0.035 + t * 5.2) * 0.5 +
-              Math.sin(x * 0.07 - t * 3.8) * 0.35 +
+            (Math.sin(x * 0.03 + t * 5.2) * 0.5 +
+              Math.sin(x * 0.06 - t * 3.8) * 0.35 +
               Math.sin(x * 0.015 + t * 2.2) * 0.2) *
               maxAmp;
           if (x === 0) ctx.moveTo(x, y);
@@ -302,14 +354,12 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
 
     animId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animId);
-  }, [isPlaying, mode]);
+  }, [isPlaying, mode, analyser]);
 
   return (
     <canvas
       ref={canvasRef}
-      width={280}
-      height={52}
-      className={`w-full h-12 block ${className}`}
+      className={`w-full h-full block ${className}`}
     />
   );
 };

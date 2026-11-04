@@ -51,6 +51,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     duration,
     volume,
     audioError,
+    analyser,
     playTrack,
     pauseTrack,
     togglePlay,
@@ -109,29 +110,13 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   };
 
   const [visualizerMode, setVisualizerModeState] = useState<VisualizerMode>(getSavedVisualizerMode);
-  const [visualizerNotification, setVisualizerNotification] = useState<string | null>(null);
-  const notifTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const showVisualizerNotification = useCallback((label: string) => {
-    if (notifTimerRef.current) clearTimeout(notifTimerRef.current);
-    setVisualizerNotification(label);
-    notifTimerRef.current = setTimeout(() => {
-      setVisualizerNotification(null);
-    }, 1500);
-  }, []);
 
   const setVisualizerMode = useCallback((mode: VisualizerMode) => {
     setVisualizerModeState(mode);
     try {
       localStorage.setItem('psp_visualizer_mode', mode);
     } catch {}
-    const labels: Record<VisualizerMode, string> = {
-      bubbles: 'Underwater Bubbles',
-      matrix: 'LED Matrix Blocks',
-      waveform: 'Neon Wave Oscilloscope',
-    };
-    showVisualizerNotification(`Visualiseur : ${labels[mode]}`);
-  }, [showVisualizerNotification]);
+  }, []);
 
   const cycleVisualizerMode = useCallback(() => {
     sound.playTick();
@@ -980,17 +965,54 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         </div>
       ) : viewMode === 'player' && currentTrack ? (
         /* 4. DEDICATED AUDIO PLAYER SCREEN (ÉCRAN DE LECTURE DÉDIÉ) */
-        <div className="absolute inset-0 pt-7 pb-4 px-5 flex flex-col justify-between z-20 animate-fade-in bg-gradient-to-b from-black/40 via-transparent to-black/60">
-          {/* Notification OSD Visualiseur (Touche SELECT / 1,5s) */}
-          {visualizerNotification && (
-            <div className="absolute top-2 right-3 z-50 bg-[#121620]/95 backdrop-blur-md border border-cyan-400/50 text-cyan-300 px-2.5 py-1 rounded-md text-[8.5px] font-mono font-bold shadow-lg shadow-cyan-500/20 animate-fade-in pointer-events-none">
-              {visualizerNotification}
+        <div className="absolute inset-0 pt-7 pb-3 px-5 flex flex-col justify-between z-20 animate-fade-in bg-gradient-to-b from-black/50 via-transparent to-black/70">
+          
+          {/* BANDEAU SUPÉRIEUR : MÉTADONNÉES BIEN ESPACÉES (Chantier 2) */}
+          <div className="w-full flex flex-col gap-0.5 mb-2 flex-shrink-0">
+            <div className="flex items-center gap-2">
+              {audioError ? (
+                <span className="px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/30 font-mono text-[8px] font-bold animate-pulse">
+                  {audioError.toUpperCase()}
+                </span>
+              ) : isPlaying ? (
+                <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono text-[8.5px] font-bold">
+                  [ LECTURE ]
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono text-[8.5px] font-bold">
+                  [ PAUSE ]
+                </span>
+              )}
+              {(() => {
+                const trackIndex = nostalgicTracks.findIndex((t) => t.id === currentTrack.id);
+                const trackNumber = trackIndex >= 0 ? trackIndex + 1 : 1;
+                const totalTracks = nostalgicTracks.length || 15;
+                return (
+                  <span className="text-[8.5px] font-mono text-cyan-300 font-bold bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-500/30">
+                    [ Morceau {trackNumber} / {totalTracks} ]
+                  </span>
+                );
+              })()}
+              <span className="text-[8px] font-mono text-white/40">
+                {currentTrack.sourceType === 'local' ? 'PCM / MP3 Local • FFT' : 'AAC 256kbps • 44.1kHz'}
+              </span>
             </div>
-          )}
 
-          <div className="flex items-center gap-4 flex-1 my-auto">
-            {/* Album Artwork Square with Glass Reflection */}
-            <div className="relative w-28 h-28 rounded-xl overflow-hidden shadow-2xl border-2 border-white/25 flex-shrink-0 group">
+            <div className="flex items-baseline gap-2 mt-0.5 min-w-0">
+              <h2 className="text-sm font-semibold text-white truncate drop-shadow">
+                {currentTrack.title}
+              </h2>
+              <span className="text-white/40 text-xs flex-shrink-0">•</span>
+              <p className="text-white/70 text-xs truncate">
+                {currentTrack.artist} — {currentTrack.album}
+              </p>
+            </div>
+          </div>
+
+          {/* ZONE MÉDIA CENTRALE (POCHETTE + GRAND VISUALISEUR H-28) (Chantier 2) */}
+          <div className="flex flex-row items-center gap-4 w-full flex-1 my-auto min-h-0">
+            {/* À gauche : La pochette d'album */}
+            <div className="relative w-28 h-28 flex-shrink-0 rounded-md overflow-hidden shadow-lg border border-white/10 group">
               <img
                 src={currentTrack.artworkUrl}
                 alt={currentTrack.title}
@@ -998,53 +1020,17 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                   isPlaying ? 'scale-105' : 'scale-100'
                 }`}
               />
-              <div className="absolute inset-0 bg-gradient-to-tr from-black/40 via-transparent to-white/15 pointer-events-none"></div>
+              <div className="absolute inset-0 bg-gradient-to-tr from-black/30 via-transparent to-white/10 pointer-events-none"></div>
             </div>
 
-            {/* Track Info & Visualizer */}
-            <div className="flex flex-col justify-center flex-1 min-w-0 pr-2">
-              <div className="flex items-center gap-2 mb-0.5">
-                {audioError ? (
-                  <span className="px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/30 font-mono text-[8px] font-bold animate-pulse">
-                    {audioError.toUpperCase()}
-                  </span>
-                ) : (
-                  <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono text-[8px] font-bold">
-                    {isPlaying ? 'LECTURE' : 'EN PAUSE'}
-                  </span>
-                )}
-                {/* Compteur de piste Sony officiel : [Morceau 3 / 15] */}
-                {(() => {
-                  const trackIndex = nostalgicTracks.findIndex((t) => t.id === currentTrack.id);
-                  const trackNumber = trackIndex >= 0 ? trackIndex + 1 : 1;
-                  const totalTracks = nostalgicTracks.length || 15;
-                  return (
-                    <span className="text-[8px] font-mono text-cyan-300 font-bold bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-500/30">
-                      [Morceau {trackNumber} / {totalTracks}]
-                    </span>
-                  );
-                })()}
-                <span className="text-[8px] font-mono text-white/40">
-                  AAC 256kbps • 44.1kHz
-                </span>
-              </div>
-
-              <h2 className="text-[14px] font-bold text-white truncate drop-shadow">
-                {currentTrack.title}
-              </h2>
-              <p className="text-[11px] text-white/80 font-medium truncate mb-2">
-                {currentTrack.artist} — <span className="text-white/60">{currentTrack.album}</span>
-              </p>
-
-              {/* Dynamic Rhythmic Spectrum Visualizer (3 Modes commutables : Bubbles, Matrix, Waveform) */}
-              <div className="w-full bg-black/40 backdrop-blur-sm rounded-lg p-1 border border-white/10 shadow-inner">
-                <AudioVisualizer isPlaying={isPlaying} mode={visualizerMode} />
-              </div>
+            {/* À droite : Le grand visualiseur audio qui prend la même hauteur que la pochette (h-28) */}
+            <div className="flex-1 h-28 bg-black/50 backdrop-blur-sm rounded-lg p-1.5 border border-white/15 shadow-inner overflow-hidden flex items-center justify-center">
+              <AudioVisualizer isPlaying={isPlaying} mode={visualizerMode} analyser={analyser} />
             </div>
           </div>
 
-          {/* Progress Bar & Timestamps & Controls HUD (Chantier 3) */}
-          <div className="w-full mt-auto mb-0.5 flex flex-col gap-1">
+          {/* TIMELINE ET BARRE DE COMMANDES ÉPURÉE SANS DOUBLON (Chantier 3) */}
+          <div className="w-full mt-auto mb-0.5 flex flex-col gap-1 flex-shrink-0">
             <div className="flex justify-between items-center text-[9px] font-mono text-white/70">
               <span className="text-white/95 font-bold tracking-wider">{formatTime(smoothTime)}</span>
               <span className="text-white/50 tracking-wider">{formatTime(duration)}</span>
@@ -1060,9 +1046,9 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                 style={{ left: `${Math.min(100, Math.max(0, (smoothTime / (duration || 30)) * 100))}%` }}
               />
             </div>
-            {/* Épuration stricte : seule mention d'aide inférieure requise */}
-            <div className="text-[8px] font-mono text-white/50 text-center mt-1.5 tracking-wider">
-              ✕ Pause • ◯ Retour • SELECT Visualiseur
+            {/* Barre de commandes officielle unique et discrète (Chantier 3) */}
+            <div className="text-[8px] font-mono text-white/60 text-center mt-1 tracking-wider">
+              ✕ Pause • ◯ Retour • △ Options • SELECT Visualiseur
             </div>
           </div>
         </div>
