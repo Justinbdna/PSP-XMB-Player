@@ -12,6 +12,8 @@ export interface Track {
   youtubeId?: string;
   sourceType?: 'itunes' | 'local' | 'youtube';
   bpm?: number;
+  codec?: string;
+  fileSizeBytes?: number;
 }
 
 export interface VideoItem {

@@ -1,17 +1,5 @@
 [
   {
-    "id": "local-track-demo",
-    "title": "Titre Local Personnel",
-    "artist": "Artiste",
-    "album": "Mon Album",
-    "url": "/audio/demo.mp3",
-    "previewUrl": "/audio/demo.mp3",
-    "artworkUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/18/c8/d7/18c8d7bc-8491-09e6-df0d-6e0a83ead680/mzi.wsikzifg.jpg/600x600bb.jpg",
-    "durationMs": 180000,
-    "sourceType": "local",
-    "bpm": 120
-  },
-  {
     "id": "psp-sade-like-a-tattoo",
     "title": "Like a Tattoo",
     "artist": "Sade",

@@ -215,7 +215,6 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           setAudioError(null);
         }).catch((err) => {
           console.warn('Local play prevented:', err);
-          setAudioError('Cliquez pour lancer');
           setIsPlaying(false);
         });
       }
@@ -238,7 +237,6 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           setAudioError(null);
         }).catch((err) => {
           console.warn('Direct play prevented:', err);
-          setAudioError('Cliquez pour lancer');
           setIsPlaying(false);
         });
       }
@@ -270,7 +268,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setAudioError(null);
       }).catch((err) => {
         console.warn('Resume failed:', err);
-        setAudioError('Cliquez pour lancer');
+        setIsPlaying(false);
       });
     }
   };
