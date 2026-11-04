@@ -42,7 +42,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   currentTheme,
   onThemeChange,
   externalCommand,
-  debugHitboxes = false,
+  debugHitboxes: _debugHitboxes = false,
 }) => {
   const {
     currentTrack,
@@ -809,9 +809,6 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
             <div className="flex items-center gap-2 text-[9px] font-mono text-white/80 flex-shrink-0">
               <span className="text-white/70">{dateStr}</span>
               <span className="font-bold text-white">{timeStr}</span>
-              <span className="px-1 py-0.5 rounded bg-white/10 text-[8px] text-white/60 border border-white/15">
-                {currentVideo.codec || 'MPEG-4 / H.264'}
-              </span>
               <div className="flex items-center gap-1 bg-white/10 px-1 py-0.5 rounded border border-white/20">
                 <div className="w-3.5 h-1.5 border border-white/90 rounded-[1px] p-[1px] flex gap-[1px]">
                   <div className="bg-white/95 w-1 h-full rounded-[0.5px]"></div>
@@ -859,7 +856,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
             {/* Ligne 2: Aide mémoire touches PSP */}
             <div className="text-[8px] font-mono text-white/50 text-center">
-              ✕ Pause/Play • ◯ Quitter • ◄/► Reculer/Avancer (5s)
+              ✕ Play/Pause • ◯ Quitter • ◄/► ±5s
             </div>
           </div>
         </div>
@@ -1143,45 +1140,34 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                               : 'opacity-45 hover:opacity-75'
                           }`}
                         >
-                          {/* Miniature avec fallback visuel élégant (icône pellicule UMD sur fond dégradé sombre) */}
-                          <div className="relative w-12 h-8 rounded overflow-hidden flex-shrink-0 shadow border border-white/20 bg-gradient-to-br from-[#1a2333] via-[#0f1522] to-black flex items-center justify-center">
+                          {/* Miniature visuelle dynamique (Image ou frame vidéo native #t=1) */}
+                          <div className="relative w-14 h-9 rounded overflow-hidden flex-shrink-0 shadow border border-white/20 bg-black/40 flex items-center justify-center">
                             {video.thumbnail ? (
                               <img
                                 src={video.thumbnail}
                                 alt={video.title}
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                  (e.currentTarget as HTMLElement).style.display = 'none';
-                                }}
+                                className="w-14 h-9 object-cover rounded"
                               />
                             ) : (
-                              <div className="flex flex-col items-center justify-center gap-0.5">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="text-cyan-400">
-                                  <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
-                                  <line x1="7" y1="2" x2="7" y2="22" />
-                                  <line x1="17" y1="2" x2="17" y2="22" />
-                                  <line x1="2" y1="12" x2="22" y2="12" />
-                                  <line x1="2" y1="7" x2="7" y2="7" />
-                                  <line x1="2" y1="17" x2="7" y2="17" />
-                                  <line x1="17" y1="17" x2="22" y2="17" />
-                                  <line x1="17" y1="7" x2="22" y2="7" />
-                                </svg>
-                                <span className="text-[6.5px] font-mono font-bold text-cyan-300 tracking-wider">MP4</span>
-                              </div>
+                              <video
+                                src={`${video.url}#t=1`}
+                                preload="metadata"
+                                muted
+                                playsInline
+                                className="w-14 h-9 object-cover rounded pointer-events-none bg-black/40 border border-white/10"
+                              />
                             )}
-                            {video.thumbnail && (
-                              <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-                                <span className="text-[8px] text-white/90">▶</span>
-                              </div>
-                            )}
+                            <div className="absolute inset-0 bg-black/20 flex items-center justify-center pointer-events-none">
+                              <span className="text-[8px] text-white/90 drop-shadow">▶</span>
+                            </div>
                           </div>
                           <div className="flex flex-col min-w-0 flex-1">
                             <div className="flex items-center gap-1.5">
                               <span className="text-[11px] font-bold truncate text-white drop-shadow">
                                 {video.title}
                               </span>
-                              {debugHitboxes && video.sizeDisplay && (
-                                <span className="text-[7.5px] px-1 py-0.2 rounded bg-amber-500/25 text-amber-300 font-mono border border-amber-500/40 flex-shrink-0">
+                              {video.sizeDisplay && (
+                                <span className="text-[7.5px] px-1 py-0.2 rounded bg-white/10 text-cyan-300 font-mono border border-cyan-400/30 flex-shrink-0">
                                   {video.sizeDisplay}
                                 </span>
                               )}
@@ -1393,76 +1379,59 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         </div>
       )}
 
-      {/* 9. BOTTOM CONTROLS BAR (Calée au bas de l'écran LCD) */}
-      <div className="absolute bottom-1 left-3 right-3 flex items-center justify-between text-[8.5px] text-white/60 font-medium z-30 pointer-events-none">
-        {viewMode === 'game_screen' ? (
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1">
-              <PSGlyph type="cross" size={11} />
-              <span>Lancer la balle</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <PSGlyph type="circle" size={11} />
-              <span>Quitter le jeu</span>
-            </span>
-            <span className="text-white/40">◀/▶ Déplacer raquette</span>
-          </div>
-        ) : viewMode === 'video_player' ? (
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1">
-              <PSGlyph type="cross" size={11} />
-              <span>{isVideoPlaying ? 'Pause' : 'Play'}</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <PSGlyph type="circle" size={11} />
-              <span>Quitter la vidéo</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <PSGlyph type="triangle" size={11} />
-              <span>Options</span>
-            </span>
-            <span className="text-white/40">◀/▶ Reculer/Avancer (5s)</span>
-          </div>
-        ) : viewMode === 'player' ? (
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1">
-              <PSGlyph type="cross" size={11} />
-              <span>{isPlaying ? 'Pause' : 'Play'}</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <PSGlyph type="circle" size={11} />
-              <span>Retour XMB</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <PSGlyph type="triangle" size={11} />
-              <span>Options</span>
-            </span>
-            <span className="text-white/40">◀/▶ Reculer/Avancer (5s)</span>
-          </div>
-        ) : (
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1">
-              <PSGlyph type="cross" size={11} />
-              <span>Valider / Entrer</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <PSGlyph type="circle" size={11} />
-              <span>Retour</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <PSGlyph type="square" size={11} />
-              <span>Play / Pause</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <PSGlyph type="triangle" size={11} />
-              <span>Options</span>
-            </span>
-          </div>
-        )}
-        <div className="text-white/35 font-mono text-[8px]">
-          PSP™ Street E1000
+      {/* 9. BOTTOM CONTROLS BAR (Calée au bas de l'écran LCD, masquée en lecteur vidéo plein écran) */}
+      {viewMode !== 'video_player' && (
+        <div className="absolute bottom-1 left-3 right-3 flex items-center justify-between text-[8.5px] text-white/60 font-medium z-30 pointer-events-none">
+          {viewMode === 'game_screen' ? (
+            <div className="flex items-center gap-3">
+              <span className="flex items-center gap-1">
+                <PSGlyph type="cross" size={11} />
+                <span>Lancer la balle</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <PSGlyph type="circle" size={11} />
+                <span>Quitter le jeu</span>
+              </span>
+              <span className="text-white/40">◀/▶ Déplacer raquette</span>
+            </div>
+          ) : viewMode === 'player' ? (
+            <div className="flex items-center gap-3">
+              <span className="flex items-center gap-1">
+                <PSGlyph type="cross" size={11} />
+                <span>{isPlaying ? 'Pause' : 'Play'}</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <PSGlyph type="circle" size={11} />
+                <span>Retour XMB</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <PSGlyph type="triangle" size={11} />
+                <span>Options</span>
+              </span>
+              <span className="text-white/40">◀/▶ Reculer/Avancer (5s)</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <span className="flex items-center gap-1">
+                <PSGlyph type="cross" size={11} />
+                <span>Valider / Entrer</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <PSGlyph type="circle" size={11} />
+                <span>Retour</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <PSGlyph type="square" size={11} />
+                <span>Play / Pause</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <PSGlyph type="triangle" size={11} />
+                <span>Options</span>
+              </span>
+            </div>
+          )}
         </div>
-      </div>
+      )}
     </div>
   );
 };
