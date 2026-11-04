@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { WaveBackground } from './WaveBackground';
 import { XMBMenu } from './XMBMenu';
 import { PSPTheme, PSP_OFFICIAL_THEMES } from '../types/xmb';
@@ -57,9 +57,44 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
   } | null>(null);
 
   const { togglePlay, showVolumeOSD, volume } = useAudio();
-  const [powerOn] = useState<boolean>(true);
 
-  // Chantier 1 & 2 : Détection mode portrait (Rotate Guard) et auto-scale proportionnel via visualViewport
+  // Machine à états d'alimentation : 'off' (veille) -> 'booting' (coldboot) -> 'on' (XMB)
+  const [powerState, setPowerState] = useState<'off' | 'booting' | 'on'>('off');
+  const coldBootVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  const handlePowerOn = useCallback(() => {
+    setPowerState((prev) => {
+      if (prev !== 'off') return prev;
+      return 'booting';
+    });
+  }, []);
+
+  const skipBoot = useCallback(() => {
+    setPowerState((prev) => (prev === 'booting' ? 'on' : prev));
+  }, []);
+
+  useEffect(() => {
+    if (powerState === 'booting' && coldBootVideoRef.current) {
+      coldBootVideoRef.current.volume = 0.35; // 35 % pour éviter toute saturation
+      coldBootVideoRef.current.play().catch(() => {
+        // repli silencieux
+      });
+    }
+  }, [powerState]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (powerState === 'off' && (e.key === 'Home' || e.key === 'h' || e.key === 'H')) {
+        handlePowerOn();
+      } else if (powerState === 'booting' && (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape')) {
+        skipBoot();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [powerState, handlePowerOn, skipBoot]);
+
+  // Chantier 1 : Détection mode portrait (Rotate Guard) et auto-scale dézoomé de 10%
   const [scale, setScale] = useState<number>(1);
   const [isPortrait, setIsPortrait] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -91,10 +126,10 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
       const scaleX = availableWidth / targetWidth;
       const scaleY = availableHeight / targetHeight;
 
-      // Facteur 1:1 sans réduction artificielle
-      const computedScale = Math.min(scaleX, scaleY);
+      // Dézoom de 10% pour un cadrage équilibré
+      const computedScale = Math.min(scaleX, scaleY) * 0.90;
 
-      setScale(Math.max(0.35, computedScale));
+      setScale(Math.max(0.30, computedScale));
     };
 
     updateScale();
@@ -119,9 +154,21 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
 
   // Send command to XMB screen without losing focus
   const sendCommand = useCallback((action: string) => {
+    if (powerState === 'off') {
+      if (action === 'home') {
+        handlePowerOn();
+      }
+      return;
+    }
+    if (powerState === 'booting') {
+      if (action === 'cross' || action === 'start' || action === 'home') {
+        skipBoot();
+      }
+      return;
+    }
     (document.activeElement as HTMLElement)?.blur();
     setExternalCommand({ action, timestamp: Date.now() });
-  }, []);
+  }, [powerState, handlePowerOn, skipBoot]);
 
   // Standard Gamepad Controller Integration via navigator.getGamepads()
   useGamepad({
@@ -164,6 +211,10 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
       togglePlay();
     },
     onHome: () => {
+      if (powerState === 'off') {
+        handlePowerOn();
+        return;
+      }
       sound.playBack();
       sendCommand('home');
     },
@@ -280,7 +331,7 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
             boxShadow: 'inset 0 0 20px rgba(0,0,0,0.95)',
           }}
         >
-          {powerOn ? (
+          {powerState === 'on' ? (
             <>
               {/* Fond dynamique sinusoïdal PSP en Canvas 2D */}
               <WaveBackground theme={theme} />
@@ -321,10 +372,24 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
               {/* Reflet subtil de vitre LCD */}
               <div className="absolute inset-0 pointer-events-none bg-gradient-to-tr from-transparent via-white/[0.02] to-white/[0.06]"></div>
             </>
-          ) : (
-            <div className="w-full h-full bg-black flex items-center justify-center text-white/30 text-xs">
-              Console éteinte
+          ) : powerState === 'booting' ? (
+            <div className="relative w-full h-full bg-black flex items-center justify-center">
+              <video
+                ref={coldBootVideoRef}
+                src="/media/coldboot.mp4"
+                playsInline
+                autoPlay
+                onEnded={() => setPowerState('on')}
+                onError={() => setPowerState('on')}
+                onClick={skipBoot}
+                className="w-full h-full object-cover select-none cursor-pointer"
+              />
             </div>
+          ) : (
+            <div
+              className="w-full h-full bg-black cursor-pointer flex flex-col items-center justify-center"
+              onClick={handlePowerOn}
+            />
           )}
         </div>
 
@@ -450,12 +515,29 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
           {/* Touche PS / Home : left 25.2%, top 92%, width 5%, height 6% */}
           <button
             onClick={() => {
+              if (powerState === 'off') {
+                handlePowerOn();
+                return;
+              }
               sound.playBack();
               sendCommand('home');
             }}
-            aria-label="Touche PS / Accueil"
-            className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
-            style={getHitboxStyle({ top: '92%', left: '25.2%', width: '5%', height: '6%', borderRadius: '4px' })}
+            aria-label="Touche PS / Accueil (Allumage en veille)"
+            className={`absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75 ${
+              powerState === 'off' ? 'animate-pulse' : ''
+            }`}
+            style={{
+              ...getHitboxStyle({ top: '92%', left: '25.2%', width: '5%', height: '6%', borderRadius: '4px' }),
+              ...(powerState === 'off'
+                ? {
+                    opacity: 1,
+                    boxShadow: '0 0 15px rgba(6, 182, 212, 0.7), inset 0 0 8px rgba(6, 182, 212, 0.5)',
+                    border: '1.5px solid rgba(6, 182, 212, 0.9)',
+                    backgroundColor: 'rgba(6, 182, 212, 0.25)',
+                    zIndex: 40,
+                  }
+                : {}),
+            }}
           />
 
           {/* Volume - : left 31.0%, top 92%, width 4.5%, height 6% */}
@@ -502,12 +584,29 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
         </div>
       </div>
 
-      {/* COMMANDES MATÉRIELLES DU CHÂSSIS (FOOTER FLOTTANT ÉPURÉ) */}
-      <div className="max-w-4xl mx-auto mt-4 px-5 py-2 bg-black/40 hover:bg-black/80 backdrop-blur-xl border border-white/5 hover:border-white/10 rounded-full transition-opacity duration-300 opacity-25 hover:opacity-90 flex items-center justify-center select-none shadow-lg">
-        <p className="text-[11px] font-mono text-white/50 tracking-wide select-none">
-          🎮 D-Pad • Ⓢ Home • VOL +/- • SELECT • START
-        </p>
-      </div>
+      {/* COMMANDES MATÉRIELLES DU CHÂSSIS & CAPSULE D'AIDE INTERACTIVE */}
+      {powerState === 'off' ? (
+        <button
+          onClick={handlePowerOn}
+          className="max-w-4xl mx-auto mt-4 px-6 py-2.5 bg-black/70 hover:bg-black/90 border border-cyan-500/30 hover:border-cyan-500/60 shadow-[0_0_15px_rgba(6,182,212,0.15)] rounded-full transition-all flex items-center justify-center select-none cursor-pointer group active:scale-95"
+        >
+          <p className="text-xs font-mono text-cyan-400 font-medium tracking-wide group-hover:text-cyan-300 transition-colors">
+            💡 Appuie sur le bouton PlayStation Ⓢ pour allumer la PSP
+          </p>
+        </button>
+      ) : powerState === 'booting' ? (
+        <div className="max-w-4xl mx-auto mt-4 px-6 py-2.5 bg-black/70 border border-white/10 rounded-full transition-all flex items-center justify-center select-none shadow-lg">
+          <p className="text-xs font-mono text-white/60 animate-pulse">
+            Démarrage du système Sony Computer Entertainment...
+          </p>
+        </div>
+      ) : (
+        <div className="max-w-4xl mx-auto mt-4 px-5 py-2 bg-black/40 hover:bg-black/80 backdrop-blur-xl border border-white/5 hover:border-white/10 rounded-full transition-opacity duration-300 opacity-25 hover:opacity-90 flex items-center justify-center select-none shadow-lg">
+          <p className="text-[11px] font-mono text-white/50 tracking-wide select-none">
+            🎮 D-Pad • Ⓢ Menu Home • VOL +/- • SELECT • START
+          </p>
+        </div>
+      )}
     </div>
   );
 };

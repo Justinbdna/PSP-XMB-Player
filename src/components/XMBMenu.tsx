@@ -122,6 +122,26 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   const [gamesList] = useState<GameItem[]>(gamesData as GameItem[]);
   const [currentGame, setCurrentGame] = useState<GameItem | null>(null);
 
+  // Étape 3 : État de boot UMD (Lancement du jeu)
+  const [isGameBooting, setIsGameBooting] = useState<boolean>(false);
+  const pendingGameRef = useRef<GameItem | null>(null);
+  const gameBootVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    if (isGameBooting && gameBootVideoRef.current) {
+      gameBootVideoRef.current.volume = 0.35; // 35 %
+      gameBootVideoRef.current.play().catch(() => {});
+    }
+  }, [isGameBooting]);
+
+  const handleGameBootEnded = () => {
+    setIsGameBooting(false);
+    if (pendingGameRef.current) {
+      setCurrentGame(pendingGameRef.current);
+    }
+    pushState('game_screen', 'game');
+  };
+
   // Official Themes list for custom theme picker
   const officialThemesList = Object.values(PSP_OFFICIAL_THEMES);
 
@@ -415,6 +435,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     isSearchModalOpen,
     currentTrack,
     visualizerMode,
+    isGameBooting,
   });
 
   useEffect(() => {
@@ -440,6 +461,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       isSearchModalOpen,
       currentTrack,
       visualizerMode,
+      isGameBooting,
     };
   });
 
@@ -663,7 +685,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   // Refactorisation stricte de la navigation directionnelle selon la logique Sony
   const handleNav = (dir: 'left' | 'right' | 'up' | 'down') => {
     const s = stateRef.current;
-    if (s.isSearchModalOpen) return;
+    if (s.isGameBooting || s.isSearchModalOpen) return;
 
     // Si le volet d'options est ouvert
     if (s.isOptionsOpen) {
@@ -778,18 +800,20 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     }
   };
 
-  // Déclencheur dédié et autonome pour lancer le mini-jeu proprement (Chantier 1 & 2)
+  // Déclencheur dédié et autonome pour lancer le mini-jeu avec boot UMD (Étape 3)
   const launchRetroGame = (gameItem?: any) => {
+    if (isGameBooting) return;
     try { sound.playEnter(); } catch (e) {} // Ne doit jamais bloquer l'exécution
+    pauseTrack();
     const targetGame = gameItem || gamesList[0] || { id: 'game-1', title: 'Mini Jeu Rétro' };
-    setCurrentGame(targetGame);
-    pushState('game_screen', 'game');
+    pendingGameRef.current = targetGame;
+    setIsGameBooting(true);
   };
 
   // Touche Croix (✕ / Entrée) : Entrer dans un dossier ou lancer la lecture plein écran
   const handleValidate = (overrideIndex?: number) => {
     const s = stateRef.current;
-    if (s.isSearchModalOpen) return;
+    if (s.isGameBooting || s.isSearchModalOpen) return;
 
     // Si le volet d'options est ouvert pendant la lecture vidéo, alterner le mode d'affichage
     if (s.isOptionsOpen) {
@@ -969,9 +993,8 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
   // External commands listener (from invisible hotspots & gamepad)
   useEffect(() => {
-    if (stateRef.current.viewMode === 'game_screen') {
-      // Le jeu a le contrôle exclusif de toutes les entrées.
-      // XMBMenu ne doit intercepter AUCUNE flèche, AUCUN bouton directionnel.
+    if (stateRef.current.viewMode === 'game_screen' || stateRef.current.isGameBooting) {
+      // Le jeu ou le boot UMD a le contrôle exclusif de toutes les entrées.
       return;
     }
 
@@ -1014,6 +1037,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   // Global Keyboard listener
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (stateRef.current.isGameBooting) return;
       if (viewMode === 'game_screen' || stateRef.current.viewMode === 'game_screen') {
         // Le jeu a le contrôle exclusif de toutes les entrées.
         // XMBMenu ne doit intercepter AUCUNE flèche, AUCUN bouton directionnel.
@@ -1980,6 +2004,19 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
             </span>
           </div>
         </div>
+      )}
+
+      {/* 10. GAME BOOT UMD (Lancement du jeu - Étape 3) */}
+      {isGameBooting && (
+        <video
+          ref={gameBootVideoRef}
+          src="/media/gameboot.mp4"
+          autoPlay
+          playsInline
+          onEnded={handleGameBootEnded}
+          onError={handleGameBootEnded}
+          className="absolute inset-0 w-full h-full object-cover z-30 bg-white pointer-events-none"
+        />
       )}
     </div>
   );
