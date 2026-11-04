@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { XMBCategory, Track, VideoItem, GameItem, PSPTheme, PSP_OFFICIAL_THEMES, VisualizerMode } from '../types/xmb';
+import { XMBCategory, Track, VideoItem, GameItem, PSPTheme, PSP_OFFICIAL_THEMES, VisualizerMode, XMBContextInfo } from '../types/xmb';
 import { CategoryIcon, PSGlyph } from './XMBIcons';
 import {
   NOSTALGIC_PSP_TRACKS,
@@ -36,6 +36,7 @@ interface XMBMenuProps {
   onThemeChange: (theme: PSPTheme) => void;
   externalCommand?: { action: string; timestamp: number } | null;
   debugHitboxes?: boolean;
+  onContextChange?: (context: XMBContextInfo) => void;
 }
 
 const formatTime = (seconds: number): string => {
@@ -50,6 +51,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   onThemeChange,
   externalCommand,
   debugHitboxes: _debugHitboxes = false,
+  onContextChange,
 }) => {
   const {
     currentTrack,
@@ -71,6 +73,28 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   // Navigation View & Stack
   const [viewMode, setViewMode] = useState<XMBViewMode>('menu');
   const [navStack, setNavStack] = useState<NavigationFrame[]>([]);
+
+  // Context info calculation for dynamic footer / didactic legend
+  const currentContext: XMBContextInfo = (() => {
+    switch (viewMode) {
+      case 'menu':
+        return 'xmb_menu';
+      case 'sublist':
+        return 'music_sublist';
+      case 'player':
+        return 'music_player';
+      case 'video_player':
+        return 'video_player';
+      case 'game_screen':
+        return 'game';
+      default:
+        return 'xmb_menu';
+    }
+  })();
+
+  useEffect(() => {
+    onContextChange?.(currentContext);
+  }, [currentContext, onContextChange]);
 
   // Navigation Coordinates (Default category: 1 = Musique)
   const [catIndex, setCatIndex] = useState<number>(1);
