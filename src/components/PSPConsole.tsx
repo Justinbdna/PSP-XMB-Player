@@ -78,9 +78,9 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
       const portrait = vw <= 950 && vh > vw;
       setIsPortrait(portrait);
 
-      // Marges de sécurité adaptatives (Dynamic Island, barre Safari et bordures)
-      const paddingX = 40;
-      const paddingY = 24;
+      // Utilisation maximale de la zone disponible
+      const paddingX = 20;
+      const paddingY = 4; // Bord à bord vertical strict
 
       const targetWidth = 940;
       const targetHeight = 460;
@@ -91,10 +91,10 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
       const scaleX = availableWidth / targetWidth;
       const scaleY = availableHeight / targetHeight;
 
-      // Dézoom de confort (multiplicateur 0.94) pour aérer la console
-      const computedScale = Math.min(1, scaleX, scaleY) * 0.94;
+      // Facteur 1:1 sans réduction artificielle
+      const computedScale = Math.min(scaleX, scaleY);
 
-      setScale(Math.max(0.32, computedScale));
+      setScale(Math.max(0.35, computedScale));
     };
 
     updateScale();
