@@ -14,6 +14,7 @@ export interface Track {
   bpm?: number;
   codec?: string;
   fileSizeBytes?: number;
+  sizeDisplay?: string;
 }
 
 export interface VideoItem {

@@ -1065,29 +1065,27 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
           <div className="flex flex-row items-center gap-4 w-full flex-1 my-auto min-h-0">
             {/* À gauche : La pochette d'album ou fallback vinyle/UMD sombre */}
             <div className="relative w-28 h-28 flex-shrink-0 rounded-md overflow-hidden shadow-lg border border-white/10 group bg-zinc-900 flex items-center justify-center">
-              {currentTrack.artworkUrl ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 text-white/30">
+                <svg className="w-12 h-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M12 2a10 10 0 0 1 10 10" strokeDasharray="2 2" />
+                </svg>
+                <span className="text-[8px] font-mono mt-1 text-white/40">AUDIO</span>
+              </div>
+              {currentTrack.artworkUrl && currentTrack.artworkUrl.trim() !== '' && (
                 <img
                   src={currentTrack.artworkUrl}
                   alt={currentTrack.title}
-                  className={`w-full h-full object-cover transition-transform duration-700 ${
+                  className={`relative z-10 w-full h-full object-cover transition-transform duration-700 ${
                     isPlaying ? 'scale-105' : 'scale-100'
                   }`}
                   onError={(e) => {
                     e.currentTarget.style.display = 'none';
                   }}
                 />
-              ) : null}
-              {(!currentTrack.artworkUrl || currentTrack.artworkUrl.trim() === '') && (
-                <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900 text-white/30">
-                  <svg className="w-12 h-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <circle cx="12" cy="12" r="10" />
-                    <circle cx="12" cy="12" r="3" />
-                    <path d="M12 2a10 10 0 0 1 10 10" strokeDasharray="2 2" />
-                  </svg>
-                  <span className="text-[8px] font-mono mt-1 text-white/40">AUDIO</span>
-                </div>
               )}
-              <div className="absolute inset-0 bg-gradient-to-tr from-black/30 via-transparent to-white/10 pointer-events-none"></div>
+              <div className="absolute inset-0 bg-gradient-to-tr from-black/30 via-transparent to-white/10 pointer-events-none z-20"></div>
             </div>
 
             {/* À droite : Le grand visualiseur audio qui prend la même hauteur que la pochette (h-28) */}
@@ -1417,11 +1415,14 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                             : 'opacity-45 hover:opacity-75'
                         }`}
                       >
-                        {track.artworkUrl ? (
+                        {track.artworkUrl && track.artworkUrl.trim() !== '' ? (
                           <img
                             src={track.artworkUrl}
                             alt={track.title}
                             className="w-8 h-8 rounded object-cover flex-shrink-0 shadow border border-white/20"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
                           />
                         ) : (
                           <div className="w-8 h-8 rounded bg-zinc-900 border border-white/20 flex items-center justify-center flex-shrink-0 text-white/40">
