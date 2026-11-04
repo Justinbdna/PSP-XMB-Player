@@ -1,3 +1,5 @@
+export type VisualizerMode = 'bubbles' | 'matrix' | 'waveform';
+
 export interface Track {
   id: string;
   title: string;

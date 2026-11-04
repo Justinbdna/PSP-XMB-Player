@@ -47,14 +47,6 @@ export const PSPConsole: React.FC = () => {
     }
   }, []);
 
-  const cycleOfficialTheme = useCallback(() => {
-    sound.playTick();
-    const themesList = Object.values(PSP_OFFICIAL_THEMES);
-    const currentIndex = themesList.findIndex((t) => t.id === theme.id);
-    const nextTheme = themesList[(currentIndex + 1) % themesList.length];
-    setTheme(nextTheme);
-  }, [theme, setTheme]);
-
   const [externalCommand, setExternalCommand] = useState<{
     action: string;
     timestamp: number;
@@ -107,7 +99,7 @@ export const PSPConsole: React.FC = () => {
       sendCommand('triangle');
     },
     onSelect: () => {
-      cycleOfficialTheme();
+      sendCommand('select');
     },
     onStart: () => {
       togglePlay();
@@ -407,10 +399,12 @@ export const PSPConsole: React.FC = () => {
             style={getHitboxStyle({ top: '92%', left: '38.6%', width: '4.5%', height: '6%', borderRadius: '4px' })}
           />
 
-          {/* SELECT : change le thème officiel en boucle */}
+          {/* SELECT : change le visualiseur dans le lecteur audio ou le thème en boucle */}
           <button
-            onClick={cycleOfficialTheme}
-            title="SELECT (Changer le thème officiel)"
+            onClick={() => {
+              sendCommand('select');
+            }}
+            title="SELECT (Visualiseur audio / Thème)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
             style={getHitboxStyle({ top: '92%', left: '66.5%', width: '6%', height: '6%', borderRadius: '4px' })}
           />
@@ -440,6 +434,8 @@ export const PSPConsole: React.FC = () => {
         <span><b className="text-pink-400">▢ / Espace</b> : Play / Pause</span>
         <span>•</span>
         <span><b className="text-emerald-400">△ / A</b> : Options</span>
+        <span>•</span>
+        <span><b className="text-cyan-400">SELECT / Tab</b> : Visualiseur</span>
         <span>•</span>
         <span><b className="text-white/80">H</b> : PS Home</span>
         {debugHitboxes && (

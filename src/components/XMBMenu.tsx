@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { XMBCategory, Track, VideoItem, GameItem, PSPTheme, PSP_OFFICIAL_THEMES } from '../types/xmb';
+import { XMBCategory, Track, VideoItem, GameItem, PSPTheme, PSP_OFFICIAL_THEMES, VisualizerMode } from '../types/xmb';
 import { CategoryIcon, PSGlyph } from './XMBIcons';
 import {
   NOSTALGIC_PSP_TRACKS,
@@ -96,6 +96,82 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
   // Contextual options side panel (Touche Triangle △)
   const [isOptionsOpen, setIsOptionsOpen] = useState<boolean>(false);
+
+  // Visualizer Mode State & Persistence (Chantier 1 & 2)
+  const getSavedVisualizerMode = (): VisualizerMode => {
+    try {
+      const saved = localStorage.getItem('psp_visualizer_mode');
+      if (saved === 'bubbles' || saved === 'matrix' || saved === 'waveform') {
+        return saved;
+      }
+    } catch {}
+    return 'bubbles';
+  };
+
+  const [visualizerMode, setVisualizerModeState] = useState<VisualizerMode>(getSavedVisualizerMode);
+  const [visualizerNotification, setVisualizerNotification] = useState<string | null>(null);
+  const notifTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showVisualizerNotification = useCallback((label: string) => {
+    if (notifTimerRef.current) clearTimeout(notifTimerRef.current);
+    setVisualizerNotification(label);
+    notifTimerRef.current = setTimeout(() => {
+      setVisualizerNotification(null);
+    }, 1500);
+  }, []);
+
+  const setVisualizerMode = useCallback((mode: VisualizerMode) => {
+    setVisualizerModeState(mode);
+    try {
+      localStorage.setItem('psp_visualizer_mode', mode);
+    } catch {}
+    const labels: Record<VisualizerMode, string> = {
+      bubbles: 'Underwater Bubbles',
+      matrix: 'LED Matrix Blocks',
+      waveform: 'Neon Wave Oscilloscope',
+    };
+    showVisualizerNotification(`Visualiseur : ${labels[mode]}`);
+  }, [showVisualizerNotification]);
+
+  const cycleVisualizerMode = useCallback(() => {
+    sound.playTick();
+    const modes: VisualizerMode[] = ['bubbles', 'matrix', 'waveform'];
+    const next = modes[(modes.indexOf(visualizerMode) + 1) % modes.length];
+    setVisualizerMode(next);
+  }, [visualizerMode, setVisualizerMode]);
+
+  // Interpolation fluide à 60 FPS du chronomètre audio (Chantier 3)
+  const [smoothTime, setSmoothTime] = useState<number>(currentTime);
+  const lastSyncRef = useRef<{ time: number; timestamp: number }>({
+    time: currentTime,
+    timestamp: performance.now(),
+  });
+
+  useEffect(() => {
+    lastSyncRef.current = {
+      time: currentTime,
+      timestamp: performance.now(),
+    };
+  }, [currentTime]);
+
+  useEffect(() => {
+    if (viewMode !== 'player') return;
+
+    let frameId: number;
+    const tick = () => {
+      if (isPlaying && duration > 0) {
+        const delta = (performance.now() - lastSyncRef.current.timestamp) / 1000;
+        const current = Math.min(duration, lastSyncRef.current.time + delta);
+        setSmoothTime(current);
+      } else {
+        setSmoothTime(currentTime);
+      }
+      frameId = requestAnimationFrame(tick);
+    };
+
+    frameId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frameId);
+  }, [isPlaying, duration, currentTime, viewMode]);
 
   // Search modal state
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -253,6 +329,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     isOptionsOpen,
     isSearchModalOpen,
     currentTrack,
+    visualizerMode,
   });
 
   useEffect(() => {
@@ -276,6 +353,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       isOptionsOpen,
       isSearchModalOpen,
       currentTrack,
+      visualizerMode,
     };
   });
 
@@ -361,6 +439,19 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     setIsOptionsOpen(false);
     setIsSearchModalOpen(false);
     setInfoPopup(null);
+  };
+
+  // Select Button (Cycle le visualiseur audio dans le lecteur ou le thème officiel dans le menu)
+  const handleSelect = () => {
+    if (stateRef.current.viewMode === 'player') {
+      cycleVisualizerMode();
+    } else {
+      const themesList = Object.values(PSP_OFFICIAL_THEMES);
+      const currIdx = themesList.findIndex((t) => t.id === currentTheme.id);
+      const nextTheme = themesList[(currIdx + 1) % themesList.length];
+      onThemeChange(nextTheme);
+      sound.playTick();
+    }
   };
 
   // Refactorisation stricte de la navigation directionnelle selon la logique Sony
@@ -651,6 +742,8 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       handleSquare();
     } else if (action === 'home') {
       handleHome();
+    } else if (action === 'select') {
+      handleSelect();
     }
   }, [externalCommand]);
 
@@ -688,6 +781,9 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       } else if (key === 'h' || e.key === 'Home') {
         e.preventDefault();
         handleHome();
+      } else if (e.key === 'Tab' || key === 'v') {
+        e.preventDefault();
+        handleSelect();
       }
     };
 
@@ -884,7 +980,14 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         </div>
       ) : viewMode === 'player' && currentTrack ? (
         /* 4. DEDICATED AUDIO PLAYER SCREEN (ÉCRAN DE LECTURE DÉDIÉ) */
-        <div className="absolute inset-0 pt-7 pb-6 px-5 flex flex-col justify-between z-20 animate-fade-in bg-gradient-to-b from-black/40 via-transparent to-black/60">
+        <div className="absolute inset-0 pt-7 pb-4 px-5 flex flex-col justify-between z-20 animate-fade-in bg-gradient-to-b from-black/40 via-transparent to-black/60">
+          {/* Notification OSD Visualiseur (Touche SELECT / 1,5s) */}
+          {visualizerNotification && (
+            <div className="absolute top-2 right-3 z-50 bg-[#121620]/95 backdrop-blur-md border border-cyan-400/50 text-cyan-300 px-2.5 py-1 rounded-md text-[8.5px] font-mono font-bold shadow-lg shadow-cyan-500/20 animate-fade-in pointer-events-none">
+              {visualizerNotification}
+            </div>
+          )}
+
           <div className="flex items-center gap-4 flex-1 my-auto">
             {/* Album Artwork Square with Glass Reflection */}
             <div className="relative w-28 h-28 rounded-xl overflow-hidden shadow-2xl border-2 border-white/25 flex-shrink-0 group">
@@ -910,6 +1013,17 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                     {isPlaying ? 'LECTURE' : 'EN PAUSE'}
                   </span>
                 )}
+                {/* Compteur de piste Sony officiel : [Morceau 3 / 15] */}
+                {(() => {
+                  const trackIndex = nostalgicTracks.findIndex((t) => t.id === currentTrack.id);
+                  const trackNumber = trackIndex >= 0 ? trackIndex + 1 : 1;
+                  const totalTracks = nostalgicTracks.length || 15;
+                  return (
+                    <span className="text-[8px] font-mono text-cyan-300 font-bold bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-500/30">
+                      [Morceau {trackNumber} / {totalTracks}]
+                    </span>
+                  );
+                })()}
                 <span className="text-[8px] font-mono text-white/40">
                   AAC 256kbps • 44.1kHz
                 </span>
@@ -922,30 +1036,33 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                 {currentTrack.artist} — <span className="text-white/60">{currentTrack.album}</span>
               </p>
 
-              {/* Dynamic Rhythmic Spectrum Visualizer */}
+              {/* Dynamic Rhythmic Spectrum Visualizer (3 Modes commutables : Bubbles, Matrix, Waveform) */}
               <div className="w-full bg-black/40 backdrop-blur-sm rounded-lg p-1 border border-white/10 shadow-inner">
-                <AudioVisualizer isPlaying={isPlaying} />
+                <AudioVisualizer isPlaying={isPlaying} mode={visualizerMode} />
               </div>
             </div>
           </div>
 
-          {/* Progress Bar & Timestamps */}
-          <div className="w-full mt-auto mb-1">
-            <div className="flex justify-between items-center text-[9px] font-mono text-white/70 mb-1">
-              <span>
-                {Math.floor(currentTime / 60)}:
-                {String(Math.floor(currentTime % 60)).padStart(2, '0')}
-              </span>
-              <span>
-                {Math.floor(duration / 60)}:
-                {String(Math.floor(duration % 60)).padStart(2, '0')}
-              </span>
+          {/* Progress Bar & Timestamps & Controls HUD (Chantier 3) */}
+          <div className="w-full mt-auto mb-0.5 flex flex-col gap-1">
+            <div className="flex justify-between items-center text-[9px] font-mono text-white/70">
+              <span className="text-white/95 font-bold tracking-wider">{formatTime(smoothTime)}</span>
+              <span className="text-white/50 tracking-wider">{formatTime(duration)}</span>
             </div>
-            <div className="w-full bg-white/15 h-1.5 rounded-full overflow-hidden shadow-inner">
+            {/* Beveled Translucent Timeline with Glowing Playhead Pin */}
+            <div className="relative w-full h-2 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 shadow-inner flex items-center">
               <div
-                className="bg-gradient-to-r from-emerald-400 to-cyan-400 h-full rounded-full transition-all duration-200"
-                style={{ width: `${Math.min(100, (currentTime / (duration || 30)) * 100)}%` }}
-              ></div>
+                className="h-full rounded-full bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 shadow-[0_0_8px_rgba(56,189,248,0.45)]"
+                style={{ width: `${Math.min(100, (smoothTime / (duration || 30)) * 100)}%` }}
+              />
+              <div
+                className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-white border border-cyan-400 shadow-[0_0_8px_#38bdf8] pointer-events-none"
+                style={{ left: `${Math.min(100, Math.max(0, (smoothTime / (duration || 30)) * 100))}%` }}
+              />
+            </div>
+            {/* Épuration stricte : seule mention d'aide inférieure requise */}
+            <div className="text-[8px] font-mono text-white/50 text-center mt-1.5 tracking-wider">
+              ✕ Pause • ◯ Retour • SELECT Visualiseur
             </div>
           </div>
         </div>
@@ -1339,6 +1456,38 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                   <div>
                     <span className="text-white/40 block text-[7.5px] uppercase">Format</span>
                     <span className="text-emerald-300 font-mono text-[8px]">AAC 256kbps • 44.1kHz</span>
+                  </div>
+                  <div>
+                    <span className="text-white/40 block text-[7.5px] uppercase mb-1">Visualiseur Audio</span>
+                    <div className="flex flex-col gap-1">
+                      {[
+                        { id: 'bubbles', label: 'Underwater Bubbles' },
+                        { id: 'matrix', label: 'LED Matrix Blocks' },
+                        { id: 'waveform', label: 'Neon Wave Oscilloscope' },
+                      ].map((m) => {
+                        const isActive = visualizerMode === m.id;
+                        return (
+                          <button
+                            key={m.id}
+                            onClick={() => {
+                              sound.playEnter();
+                              setVisualizerMode(m.id as VisualizerMode);
+                            }}
+                            className={`flex items-center justify-between px-2 py-1 rounded text-[8px] font-medium transition-all ${
+                              isActive
+                                ? 'bg-cyan-500/30 text-cyan-200 border border-cyan-400/50 shadow-[0_0_8px_rgba(6,182,212,0.3)]'
+                                : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white border border-transparent'
+                            }`}
+                          >
+                            <span>{m.label}</span>
+                            {isActive && <span className="text-cyan-400 text-[9px]">●</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <span className="text-[7px] text-white/40 mt-1 block font-mono">
+                      Touche SELECT pour cycler à la volée
+                    </span>
                   </div>
                 </>
               ) : viewMode === 'video_player' && currentVideo ? (
