@@ -248,7 +248,7 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
   });
 
   return (
-    <div className="relative min-h-screen h-screen w-full bg-[#08090c] flex flex-col items-center justify-center p-2 sm:p-4 overflow-hidden font-['Inter',sans-serif]">
+    <div className="w-full h-full min-h-screen bg-[#08090c] flex flex-col items-center justify-center p-4 select-none overflow-hidden font-['Inter',sans-serif]">
       {/* Background ambient lighting */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(40,55,75,0.18),rgba(0,0,0,0.96))] pointer-events-none"></div>
 
@@ -288,18 +288,25 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
       )}
 
       {/* ========================================================
-          CONTENEUR GLOBAL AU RATIO FIXE DE LA CONSOLE (~2.36:1)
+          1. CONTENEUR GLOBAL AU RATIO FIXE DE LA CONSOLE (~2.36:1)
           Mécanique d'Architecture Calque Style Apple Music 404
           ======================================================== */}
       <div
-        className="relative z-10 w-[940px] max-w-none aspect-[1024/433] select-none flex items-center justify-center drop-shadow-[0_35px_50px_rgba(0,0,0,0.95)] flex-shrink-0"
-        onContextMenu={(e) => e.preventDefault()}
+        className="relative flex items-center justify-center transition-transform duration-200 flex-shrink-0"
         style={{
-          '--psp-chassis-url': `url(${activeChassis.image})`,
-          transform: `scale(${scale})`,
-          transformOrigin: 'center center',
-        } as React.CSSProperties}
+          width: `${940 * scale}px`,
+          height: `${(940 * 433 / 1024) * scale}px`,
+        }}
       >
+        <div
+          className="relative z-10 w-[940px] max-w-none aspect-[1024/433] select-none flex items-center justify-center drop-shadow-[0_35px_50px_rgba(0,0,0,0.95)] flex-shrink-0"
+          onContextMenu={(e) => e.preventDefault()}
+          style={{
+            '--psp-chassis-url': `url(${activeChassis.image})`,
+            transform: `scale(${scale})`,
+            transformOrigin: 'center center',
+          } as React.CSSProperties}
+        >
         {/* ========================================================
             CALQUE 1 — FOND : BOÎTIER PSP STREET E1000 VERROUILLÉ
             (Non sélectionnable, non déplaçable, non téléchargeable)
@@ -523,12 +530,15 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
               sendCommand('home');
             }}
             aria-label="Touche PS / Accueil (Allumage en veille)"
-            className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75 flex items-center justify-center"
-            style={getHitboxStyle({ top: '92%', left: '25.2%', width: '5%', height: '6%', borderRadius: '4px' })}
+            className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75 flex items-center justify-center overflow-visible z-30"
+            style={{
+              ...getHitboxStyle({ top: '92%', left: '25.2%', width: '5%', height: '6%', borderRadius: '4px' }),
+              opacity: debugHitboxes ? 1 : powerState === 'off' ? 1 : 0,
+            }}
           >
             {/* Halo circulaire blanc translucide discret sur le bouton PlayStation */}
             {powerState === 'off' && (
-              <span className="absolute inset-0 m-auto w-9 h-9 rounded-full bg-white/10 ring-1 ring-white/30 shadow-[0_0_20px_rgba(255,255,255,0.35)] animate-pulse pointer-events-none" />
+              <span className="absolute inset-0 m-auto w-10 h-10 rounded-full bg-white/15 ring-2 ring-white/40 shadow-[0_0_25px_rgba(255,255,255,0.6)] animate-pulse pointer-events-none z-30" />
             )}
           </button>
 
@@ -575,36 +585,33 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
           />
         </div>
       </div>
+    </div>
 
-      {/* COMMANDES MATÉRIELLES DU CHÂSSIS & CAPSULE D'AIDE INTERACTIVE */}
-      {powerState === 'off' ? (
-        <div className="mt-4 flex items-center justify-center flex-shrink-0 z-20">
+      {/* 2. La capsule d'aide : EN DEHORS ET EN DESSOUS DU CHÂSSIS */}
+      <div className="mt-6 z-30 flex items-center justify-center flex-shrink-0">
+        {powerState === 'off' ? (
           <button
             onClick={handlePowerOn}
-            className="px-5 py-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 backdrop-blur-md transition-all duration-300 shadow-lg group cursor-pointer"
+            className="px-6 py-2.5 rounded-full bg-white/10 hover:bg-white/15 border border-white/20 backdrop-blur-xl transition-all duration-300 shadow-[0_4px_20px_rgba(0,0,0,0.5)] group cursor-pointer"
           >
-            <p className="text-xs font-mono text-white/80 group-hover:text-white tracking-wide flex items-center gap-2">
-              <span className="text-sm">↖</span> Cliquez sur le bouton PlayStation pour allumer
+            <p className="text-xs font-mono text-white/90 group-hover:text-white tracking-wide flex items-center gap-2">
+              <span className="text-base text-cyan-300">↖</span> Cliquez sur le bouton PlayStation pour allumer
             </p>
           </button>
-        </div>
-      ) : powerState === 'booting' ? (
-        <div className="mt-4 flex items-center justify-center flex-shrink-0 z-20">
-          <div className="px-5 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-md shadow-lg flex items-center justify-center select-none">
+        ) : powerState === 'booting' ? (
+          <div className="px-6 py-2 rounded-full bg-black/60 border border-white/10 backdrop-blur-md">
             <p className="text-xs font-mono text-white/60 animate-pulse">
               Démarrage du système Sony Computer Entertainment...
             </p>
           </div>
-        </div>
-      ) : (
-        <div className="mt-4 flex items-center justify-center flex-shrink-0 z-20">
-          <div className="max-w-4xl mx-auto px-5 py-2 bg-black/40 hover:bg-black/80 backdrop-blur-xl border border-white/5 hover:border-white/10 rounded-full transition-opacity duration-300 opacity-25 hover:opacity-90 flex items-center justify-center select-none shadow-lg">
-            <p className="text-[11px] font-mono text-white/50 tracking-wide select-none">
-              🎮 D-Pad • Ⓢ Menu Home • VOL +/- • SELECT • START
+        ) : (
+          <div className="px-5 py-1.5 rounded-full bg-black/40 border border-white/5 backdrop-blur-sm">
+            <p className="text-[11px] font-mono text-white/40 tracking-wider">
+              🎮 D-Pad • Ⓢ Home • VOL +/- • SELECT • START
             </p>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };
