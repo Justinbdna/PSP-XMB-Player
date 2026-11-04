@@ -11,62 +11,7 @@
     "codec": "MPEG-4 AVC / H.264"
   },
   {
-    "id": "vid-2-bad-gyal-fiebre-prod-king-doudou",
-    "title": "BAD GYAL FIEBRE PROD KING DOUDOU slow wine",
-    "artist": "Sélection Personnelle",
-    "thumbnail": "",
-    "url": "/videos/BAD%20GYAL%20-%20FIEBRE%20PROD%20KING%20DOUDOU%20slow%20wine.mp4",
-    "fileSizeBytes": 12382633,
-    "sizeDisplay": "11.8 Mo",
-    "duration": "--:--",
-    "codec": "MPEG-4 AVC / H.264"
-  },
-  {
-    "id": "vid-3-bad-gyal-aprendiendo-el-sexo",
-    "title": "Bad Gyal Aprendiendo El Sexo",
-    "artist": "Sélection Personnelle",
-    "thumbnail": "",
-    "url": "/videos/Bad%20Gyal%20-%20Aprendiendo%20El%20Sexo.mp4",
-    "fileSizeBytes": 9510041,
-    "sizeDisplay": "9.1 Mo",
-    "duration": "--:--",
-    "codec": "MPEG-4 AVC / H.264"
-  },
-  {
-    "id": "vid-4-bad-gyal-flow-2000-official-vide",
-    "title": "Bad Gyal Flow 2000 (Official Video)",
-    "artist": "Sélection Personnelle",
-    "thumbnail": "",
-    "url": "/videos/Bad%20Gyal%20-%20Flow%202000%20(Official%20Video).mp4",
-    "fileSizeBytes": 16173842,
-    "sizeDisplay": "15.4 Mo",
-    "duration": "--:--",
-    "codec": "MPEG-4 AVC / H.264"
-  },
-  {
-    "id": "vid-5-beyonce-crazy-in-love-ft-jay-z",
-    "title": "Beyoncé Crazy In Love ft. JAY Z",
-    "artist": "Sélection Personnelle",
-    "thumbnail": "",
-    "url": "/videos/Beyonce%CC%81%20-%20Crazy%20In%20Love%20ft.%20JAY%20Z.mp4",
-    "fileSizeBytes": 24607890,
-    "sizeDisplay": "23.5 Mo",
-    "duration": "--:--",
-    "codec": "MPEG-4 AVC / H.264"
-  },
-  {
-    "id": "vid-6-beyonce-shakira-beautiful-liar",
-    "title": "Beyoncé, Shakira Beautiful Liar",
-    "artist": "Sélection Personnelle",
-    "thumbnail": "",
-    "url": "/videos/Beyonce%CC%81,%20Shakira%20-%20Beautiful%20Liar.mp4",
-    "fileSizeBytes": 12700741,
-    "sizeDisplay": "12.1 Mo",
-    "duration": "--:--",
-    "codec": "MPEG-4 AVC / H.264"
-  },
-  {
-    "id": "vid-7-beyonce-baby-boy-video-ft-sean-p",
+    "id": "vid-2-beyonce-baby-boy-video-ft-sean-p",
     "title": "Beyoncé Baby Boy (Video) ft. Sean Paul",
     "artist": "Sélection Personnelle",
     "thumbnail": "",
@@ -77,18 +22,7 @@
     "codec": "MPEG-4 AVC / H.264"
   },
   {
-    "id": "vid-8-lady-gaga-bad-romance-official-m",
-    "title": "Lady Gaga Bad Romance (Official Music Video)",
-    "artist": "Sélection Personnelle",
-    "thumbnail": "",
-    "url": "/videos/Lady%20Gaga%20-%20Bad%20Romance%20(Official%20Music%20Video).mp4",
-    "fileSizeBytes": 17866630,
-    "sizeDisplay": "17.0 Mo",
-    "duration": "--:--",
-    "codec": "MPEG-4 AVC / H.264"
-  },
-  {
-    "id": "vid-9-lady-gaga-poker-face-official-mu",
+    "id": "vid-3-lady-gaga-poker-face-official-mu",
     "title": "Lady Gaga Poker Face (Official Music Video)",
     "artist": "Sélection Personnelle",
     "thumbnail": "",
@@ -99,40 +33,7 @@
     "codec": "MPEG-4 AVC / H.264"
   },
   {
-    "id": "vid-10-pnl-j-suis-qlf-clip-officiel",
-    "title": "PNL J'Suis QLF [Clip Officiel]",
-    "artist": "Sélection Personnelle",
-    "thumbnail": "",
-    "url": "/videos/PNL%20-%20J'Suis%20QLF%20%5BClip%20Officiel%5D.mp4",
-    "fileSizeBytes": 25291925,
-    "sizeDisplay": "24.1 Mo",
-    "duration": "--:--",
-    "codec": "MPEG-4 AVC / H.264"
-  },
-  {
-    "id": "vid-11-pnl-le-monde-ou-rien-clip-offici",
-    "title": "PNL Le monde ou rien [Clip Officiel]",
-    "artist": "Sélection Personnelle",
-    "thumbnail": "",
-    "url": "/videos/PNL%20-%20Le%20monde%20ou%20rien%20%5BClip%20Officiel%5D.mp4",
-    "fileSizeBytes": 21116468,
-    "sizeDisplay": "20.1 Mo",
-    "duration": "--:--",
-    "codec": "MPEG-4 AVC / H.264"
-  },
-  {
-    "id": "vid-12-rihanna-rude-boy",
-    "title": "Rihanna Rude Boy",
-    "artist": "Sélection Personnelle",
-    "thumbnail": "",
-    "url": "/videos/Rihanna%20-%20Rude%20Boy.mp4",
-    "fileSizeBytes": 23600497,
-    "sizeDisplay": "22.5 Mo",
-    "duration": "--:--",
-    "codec": "MPEG-4 AVC / H.264"
-  },
-  {
-    "id": "vid-13-theodora-mon-bebe-free-kitty-ver",
+    "id": "vid-4-theodora-mon-bebe-free-kitty-ver",
     "title": "THEODORA MON BÉBÉ (Free kitty version)",
     "artist": "Sélection Personnelle",
     "thumbnail": "",
