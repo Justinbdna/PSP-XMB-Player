@@ -52,8 +52,8 @@ export const PSPConsole: React.FC = () => {
     timestamp: number;
   } | null>(null);
 
-  // Commutateur dynamique pour le mode Debug visuel des Hitboxes
-  const [debugHitboxes, setDebugHitboxes] = useState<boolean>(true);
+  // Commutateur dynamique pour le mode Debug visuel des Hitboxes (désactivé par défaut)
+  const [debugHitboxes, setDebugHitboxes] = useState<boolean>(false);
 
   const { adjustVolume, togglePlay, showVolumeOSD, volume } = useAudio();
   const [powerOn] = useState<boolean>(true);
@@ -259,7 +259,7 @@ export const PSPConsole: React.FC = () => {
               sound.playTick();
               sendCommand('left');
             }}
-            title="Gâchette L (Catégorie Gauche)"
+            aria-label="Gâchette L (Catégorie Gauche)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.94] transition-transform duration-75"
             style={getHitboxStyle({ top: '3.5%', left: '8.5%', width: '14%', height: '7%', borderRadius: '4px' })}
           />
@@ -270,7 +270,7 @@ export const PSPConsole: React.FC = () => {
               sound.playTick();
               sendCommand('right');
             }}
-            title="Gâchette R (Catégorie Droite)"
+            aria-label="Gâchette R (Catégorie Droite)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.94] transition-transform duration-75"
             style={getHitboxStyle({ top: '3.5%', left: '91.5%', width: '14%', height: '7%', borderRadius: '4px' })}
           />
@@ -282,7 +282,7 @@ export const PSPConsole: React.FC = () => {
               sound.playTick();
               sendCommand('up');
             }}
-            title="D-Pad Haut"
+            aria-label="D-Pad Haut"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
             style={getHitboxStyle({ top: '32.5%', left: '11.2%', width: '4.8%', aspectRatio: '1 / 1', borderRadius: '6px' })}
           />
@@ -293,7 +293,7 @@ export const PSPConsole: React.FC = () => {
               sound.playTick();
               sendCommand('down');
             }}
-            title="D-Pad Bas"
+            aria-label="D-Pad Bas"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
             style={getHitboxStyle({ top: '55.5%', left: '11.2%', width: '4.8%', aspectRatio: '1 / 1', borderRadius: '6px' })}
           />
@@ -304,7 +304,7 @@ export const PSPConsole: React.FC = () => {
               sound.playTick();
               sendCommand('left');
             }}
-            title="D-Pad Gauche"
+            aria-label="D-Pad Gauche"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
             style={getHitboxStyle({ top: '44.0%', left: '6.2%', width: '4.8%', aspectRatio: '1 / 1', borderRadius: '6px' })}
           />
@@ -315,7 +315,7 @@ export const PSPConsole: React.FC = () => {
               sound.playTick();
               sendCommand('right');
             }}
-            title="D-Pad Droite"
+            aria-label="D-Pad Droite"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
             style={getHitboxStyle({ top: '44.0%', left: '16.2%', width: '4.8%', aspectRatio: '1 / 1', borderRadius: '6px' })}
           />
@@ -327,7 +327,7 @@ export const PSPConsole: React.FC = () => {
               sound.playOption();
               sendCommand('triangle');
             }}
-            title="Triangle (Options contextuelles)"
+            aria-label="Triangle (Options contextuelles)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
             style={getHitboxStyle({ top: '29.5%', left: '89.5%', width: '5.6%' }, true)}
           />
@@ -338,7 +338,7 @@ export const PSPConsole: React.FC = () => {
               sound.playEnter();
               sendCommand('cross');
             }}
-            title="Croix (Valider / Lecture)"
+            aria-label="Croix (Valider / Lecture)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
             style={getHitboxStyle({ top: '58.5%', left: '89.5%', width: '5.6%' }, true)}
           />
@@ -349,7 +349,7 @@ export const PSPConsole: React.FC = () => {
               sound.playTick();
               sendCommand('square');
             }}
-            title="Carré (Bascule Play / Pause immédiate)"
+            aria-label="Carré (Bascule Play / Pause immédiate)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
             style={getHitboxStyle({ top: '44.0%', left: '83.5%', width: '5.6%' }, true)}
           />
@@ -360,7 +360,7 @@ export const PSPConsole: React.FC = () => {
               sound.playBack();
               sendCommand('circle');
             }}
-            title="Rond (Retour arrière)"
+            aria-label="Rond (Retour arrière)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
             style={getHitboxStyle({ top: '44.0%', left: '95.5%', width: '5.6%' }, true)}
           />
@@ -372,7 +372,7 @@ export const PSPConsole: React.FC = () => {
               sound.playBack();
               sendCommand('home');
             }}
-            title="Touche PS / Accueil"
+            aria-label="Touche PS / Accueil"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
             style={getHitboxStyle({ top: '92%', left: '25.2%', width: '5%', height: '6%', borderRadius: '4px' })}
           />
@@ -383,7 +383,7 @@ export const PSPConsole: React.FC = () => {
               adjustVolume(-0.05);
               sound.playTick();
             }}
-            title="Volume -"
+            aria-label="Volume -"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
             style={getHitboxStyle({ top: '92%', left: '31.0%', width: '4.5%', height: '6%', borderRadius: '4px' })}
           />
@@ -394,7 +394,7 @@ export const PSPConsole: React.FC = () => {
               adjustVolume(0.05);
               sound.playTick();
             }}
-            title="Volume +"
+            aria-label="Volume +"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
             style={getHitboxStyle({ top: '92%', left: '38.6%', width: '4.5%', height: '6%', borderRadius: '4px' })}
           />
@@ -404,7 +404,7 @@ export const PSPConsole: React.FC = () => {
             onClick={() => {
               sendCommand('select');
             }}
-            title="SELECT (Visualiseur audio / Thème)"
+            aria-label="SELECT"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
             style={getHitboxStyle({ top: '92%', left: '66.5%', width: '6%', height: '6%', borderRadius: '4px' })}
           />
@@ -414,7 +414,7 @@ export const PSPConsole: React.FC = () => {
             onClick={() => {
               togglePlay();
             }}
-            title="START (Play / Pause)"
+            aria-label="START (Play / Pause)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
             style={getHitboxStyle({ top: '92%', left: '74.5%', width: '6%', height: '6%', borderRadius: '4px' })}
           />

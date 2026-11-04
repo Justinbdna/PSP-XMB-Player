@@ -51,7 +51,6 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     currentTime,
     duration,
     volume,
-    audioError,
     analyser,
     playTrack,
     pauseTrack,
@@ -97,21 +96,23 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   const [historyTracks, setHistoryTracks] = useState<Track[]>([]);
   const [searchResults, setSearchResults] = useState<Track[]>([]);
 
-  // Hardware Battery API (Chantier 5)
-  const [batteryLevel, setBatteryLevel] = useState<number>(1);
+  // Hardware Battery API (Chantier 3)
   const [isCharging, setIsCharging] = useState<boolean>(false);
 
   useEffect(() => {
     if (typeof navigator !== 'undefined' && 'getBattery' in navigator) {
-      (navigator as any).getBattery().then((battery: any) => {
-        const update = () => {
-          setBatteryLevel(battery.level);
-          setIsCharging(battery.charging);
-        };
-        update();
-        battery.addEventListener('levelchange', update);
-        battery.addEventListener('chargingchange', update);
-      }).catch(console.warn);
+      (navigator as any)
+        .getBattery()
+        .then((battery: any) => {
+          setIsCharging(Boolean(battery.charging));
+          const update = () => {
+            setIsCharging(Boolean(battery.charging));
+          };
+          battery.addEventListener('chargingchange', update);
+        })
+        .catch(() => {
+          setIsCharging(false);
+        });
     }
   }, []);
 
@@ -592,7 +593,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   };
 
   // Touche Croix (✕ / Entrée) : Entrer dans un dossier ou lancer la lecture plein écran
-  const handleValidate = () => {
+  const handleValidate = (overrideIndex?: number) => {
     const s = stateRef.current;
     if (s.isSearchModalOpen) return;
 
@@ -637,8 +638,9 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
     // 4. In Sublist: play selected game, video, theme or audio track
     if (s.viewMode === 'sublist') {
+      const activeSubIndex = overrideIndex !== undefined ? overrideIndex : s.subItemIndex;
       if (s.subListType === 'theme') {
-        const selectedTheme = s.officialThemesList[s.subItemIndex];
+        const selectedTheme = s.officialThemesList[activeSubIndex];
         if (selectedTheme) {
           onThemeChange(selectedTheme);
           setInfoPopup(`Thème appliqué : ${selectedTheme.name}`);
@@ -647,7 +649,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         return;
       }
       if (s.subListType === 'game') {
-        const selectedGame = s.gamesList[s.subItemIndex];
+        const selectedGame = s.gamesList[activeSubIndex];
         if (selectedGame) {
           pauseTrack();
           setCurrentGame(selectedGame);
@@ -656,7 +658,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         return;
       }
       if (s.subListType === 'video') {
-        const selectedVideo = s.videosList[s.subItemIndex];
+        const selectedVideo = s.videosList[activeSubIndex];
         if (selectedVideo) {
           pauseTrack();
           setCurrentVideo(selectedVideo);
@@ -665,7 +667,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         }
         return;
       }
-      const selectedTrack = s.currentSubList[s.subItemIndex];
+      const selectedTrack = s.currentSubList[activeSubIndex];
       if (selectedTrack) {
         playTrack(selectedTrack);
         pushState('player');
@@ -674,7 +676,8 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     }
 
     // 5. In Main XMB Menu (Validation de dossier ou action)
-    const currentItem = s.activeItems[s.itemIndex];
+    const activeItemIdx = overrideIndex !== undefined ? overrideIndex : s.itemIndex;
+    const currentItem = s.activeItems[activeItemIdx];
     if (!currentItem) return;
 
     if (currentItem.type === 'folder') {
@@ -709,6 +712,13 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       setInfoPopup(`${currentItem.label} : ${currentItem.sublabel || 'Disponible sur le système'}`);
       setTimeout(() => setInfoPopup(null), 3000);
     }
+  };
+
+  // Sélection explicite et immédiate par clic souris / tap tactile (Chantier 1)
+  const handleItemSelect = (index: number) => {
+    stateRef.current.itemIndex = index;
+    setItemIndex(index);
+    handleValidate(index);
   };
 
   // Touche Triangle (△ / Touche A) : Ouvrir / fermer le volet latéral d'options contextuelles
@@ -858,48 +868,30 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
             <span className="font-mono text-white/90">{dateStr}</span>
             <span className="font-mono font-bold text-white">{timeStr}</span>
 
-            {/* JAUGE BATTERIE OFFICIELLE SONY PSP À 4 SEGMENTS (Chantier 5) */}
-            {(() => {
-              const filledBars =
-                batteryLevel > 0.75 ? 4 : batteryLevel > 0.5 ? 3 : batteryLevel > 0.25 ? 2 : 1;
-              const isCritical = batteryLevel < 0.1;
-              return (
-                <div className="flex items-center gap-1 bg-white/10 px-1.5 py-0.5 rounded border border-white/20">
-                  {isCharging && (
-                    <span
-                      className="text-[8.5px] text-amber-400 font-bold animate-pulse leading-none"
-                      title="Alimentation secteur active"
-                    >
-                      ⚡
-                    </span>
-                  )}
-                  <div className="relative flex items-center">
-                    {/* Corps rectangulaire découpé en 4 barres */}
-                    <div className="w-5 h-2.5 border border-white/90 rounded-[1.5px] p-[1px] flex gap-[1px] items-center bg-black/40">
-                      {[1, 2, 3, 4].map((bar) => {
-                        const isFilled = bar <= filledBars;
-                        return (
-                          <div
-                            key={bar}
-                            className={`w-1 h-full rounded-[0.5px] transition-colors ${
-                              isFilled
-                                ? isCharging
-                                  ? 'bg-amber-400 animate-pulse'
-                                  : isCritical
-                                  ? 'bg-red-400 animate-pulse'
-                                  : 'bg-white/95'
-                                : 'bg-white/10'
-                            }`}
-                          />
-                        );
-                      })}
-                    </div>
-                    {/* Ergot borne positive à droite */}
-                    <div className="w-[1.5px] h-1.5 bg-white/80 rounded-r-[0.5px] -ml-[0.5px]" />
-                  </div>
+            {/* JAUGE BATTERIE OFFICIELLE SONY PSP À 4 BARRES PLEINES PERMANENTES (Chantier 3) */}
+            <div className="flex items-center gap-1 bg-white/10 px-1.5 py-0.5 rounded border border-white/20">
+              {isCharging && (
+                <span
+                  className="text-[8.5px] text-amber-400 font-bold animate-pulse leading-none"
+                  title="Alimentation secteur active"
+                >
+                  ⚡
+                </span>
+              )}
+              <div className="relative flex items-center">
+                {/* Corps rectangulaire découpé en 4 barres pleines */}
+                <div className="w-5 h-2.5 border border-white/90 rounded-[1.5px] p-[1px] flex gap-[1px] items-center bg-black/40">
+                  {[1, 2, 3, 4].map((bar) => (
+                    <div
+                      key={bar}
+                      className="w-1 h-full rounded-[0.5px] bg-white/95"
+                    />
+                  ))}
                 </div>
-              );
-            })()}
+                {/* Ergot borne positive à droite */}
+                <div className="w-[1.5px] h-1.5 bg-white/80 rounded-r-[0.5px] -ml-[0.5px]" />
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -992,39 +984,25 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
             <div className="flex items-center gap-2 text-[9px] font-mono text-white/80 flex-shrink-0">
               <span className="text-white/70">{dateStr}</span>
               <span className="font-bold text-white">{timeStr}</span>
-              {(() => {
-                const filledBars =
-                  batteryLevel > 0.75 ? 4 : batteryLevel > 0.5 ? 3 : batteryLevel > 0.25 ? 2 : 1;
-                const isCritical = batteryLevel < 0.1;
-                return (
-                  <div className="flex items-center gap-1 bg-white/10 px-1 py-0.5 rounded border border-white/20">
-                    {isCharging && (
-                      <span className="text-[8px] text-amber-400 font-bold animate-pulse leading-none">
-                        ⚡
-                      </span>
-                    )}
-                    <div className="relative flex items-center">
-                      <div className="w-4 h-2 border border-white/90 rounded-[1px] p-[1px] flex gap-[1px] items-center bg-black/40">
-                        {[1, 2, 3, 4].map((bar) => (
-                          <div
-                            key={bar}
-                            className={`w-0.5 h-full rounded-[0.5px] ${
-                              bar <= filledBars
-                                ? isCharging
-                                  ? 'bg-amber-400 animate-pulse'
-                                  : isCritical
-                                  ? 'bg-red-400 animate-pulse'
-                                  : 'bg-white/95'
-                                : 'bg-white/10'
-                            }`}
-                          />
-                        ))}
-                      </div>
-                      <div className="w-[1px] h-1 bg-white/80 rounded-r-[0.5px] -ml-[0.5px]" />
-                    </div>
+              {/* Jauge batterie 4 barres pleines permanente avec détection charge (Chantier 3) */}
+              <div className="flex items-center gap-1 bg-white/10 px-1 py-0.5 rounded border border-white/20">
+                {isCharging && (
+                  <span className="text-[8px] text-amber-400 font-bold animate-pulse leading-none">
+                    ⚡
+                  </span>
+                )}
+                <div className="relative flex items-center">
+                  <div className="w-4 h-2 border border-white/90 rounded-[1px] p-[1px] flex gap-[1px] items-center bg-black/40">
+                    {[1, 2, 3, 4].map((bar) => (
+                      <div
+                        key={bar}
+                        className="w-0.5 h-full rounded-[0.5px] bg-white/95"
+                      />
+                    ))}
                   </div>
-                );
-              })()}
+                  <div className="w-[1px] h-1 bg-white/80 rounded-r-[0.5px] -ml-[0.5px]" />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1073,47 +1051,14 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         /* 4. DEDICATED AUDIO PLAYER SCREEN (ÉCRAN DE LECTURE DÉDIÉ) */
         <div className="absolute inset-0 pt-7 pb-3 px-5 flex flex-col justify-between z-20 animate-fade-in bg-gradient-to-b from-black/50 via-transparent to-black/70">
           
-          {/* BANDEAU SUPÉRIEUR : MÉTADONNÉES BIEN ESPACÉES (Chantier 2) */}
-          <div className="w-full flex flex-col gap-0.5 mb-2 flex-shrink-0">
-            <div className="flex items-center gap-2">
-              {audioError && audioError !== 'Cliquez pour lancer' ? (
-                <span className="px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/30 font-mono text-[8px] font-bold animate-pulse">
-                  {audioError.toUpperCase()}
-                </span>
-              ) : isPlaying ? (
-                <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono text-[8.5px] font-bold">
-                  [ LECTURE ]
-                </span>
-              ) : (
-                <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono text-[8.5px] font-bold">
-                  [ PAUSE ]
-                </span>
-              )}
-              {(() => {
-                const activeTrackList = currentTrack.sourceType === 'local' ? localTracks : itunesTracks;
-                const trackIndex = activeTrackList.findIndex((t) => t.id === currentTrack.id);
-                const trackNumber = trackIndex >= 0 ? trackIndex + 1 : 1;
-                const totalTracks = activeTrackList.length || 1;
-                return (
-                  <span className="text-[8.5px] font-mono text-cyan-300 font-bold bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-500/30">
-                    [ Morceau {trackNumber} / {totalTracks} ]
-                  </span>
-                );
-              })()}
-              <span className="text-[8px] font-mono text-white/40">
-                {currentTrack.codec || 'AAC 256kbps • 44.1kHz'}
-              </span>
-            </div>
-
-            <div className="flex items-baseline gap-2 mt-0.5 min-w-0">
-              <h2 className="text-sm font-semibold text-white truncate drop-shadow">
-                {currentTrack.title}
-              </h2>
-              <span className="text-white/40 text-xs flex-shrink-0">•</span>
-              <p className="text-white/70 text-xs truncate">
-                {currentTrack.artist} — {currentTrack.album}
-              </p>
-            </div>
+          {/* BANDEAU SUPÉRIEUR : TYPOGRAPHIE OFFICIELLE SONY SOBRE (Chantier 2) */}
+          <div className="w-full flex flex-col gap-0.5 mb-2 flex-shrink-0 min-w-0">
+            <h2 className="text-sm font-medium tracking-wide text-white drop-shadow truncate">
+              {currentTrack.title}
+            </h2>
+            <p className="text-white/60 text-xs truncate">
+              {currentTrack.artist} — {currentTrack.album}
+            </p>
           </div>
 
           {/* ZONE MÉDIA CENTRALE (POCHETTE + GRAND VISUALISEUR H-28) */}
@@ -1233,9 +1178,10 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                   return (
                     <div
                       key={item.id}
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         setItemIndex(idx);
-                        handleValidate();
+                        handleItemSelect(idx);
                       }}
                       className={`h-11 flex items-center px-3 gap-3 rounded-lg cursor-pointer transition-all duration-200 ${
                         isSelected
@@ -1282,8 +1228,10 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                     return (
                       <div
                         key={t.id || idx}
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setSubItemIndex(idx);
+                          stateRef.current.subItemIndex = idx;
                           onThemeChange(t);
                           sound.playEnter();
                           setInfoPopup(`Thème appliqué : ${t.name}`);
@@ -1331,8 +1279,10 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                     return (
                       <div
                         key={game.id}
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setSubItemIndex(idx);
+                          stateRef.current.subItemIndex = idx;
                           pauseTrack();
                           setCurrentGame(game);
                           pushState('game_screen', 'game');
@@ -1380,8 +1330,10 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                       return (
                         <div
                           key={video.id}
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setSubItemIndex(idx);
+                            stateRef.current.subItemIndex = idx;
                             pauseTrack();
                             setCurrentVideo(video);
                             setIsVideoPlaying(true);
@@ -1452,8 +1404,10 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                     return (
                       <div
                         key={track.id}
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setSubItemIndex(idx);
+                          stateRef.current.subItemIndex = idx;
                           playTrack(track);
                           pushState('player');
                         }}
