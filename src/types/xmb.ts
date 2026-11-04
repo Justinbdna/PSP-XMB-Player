@@ -1,5 +1,12 @@
 export type VisualizerMode = 'bubbles' | 'matrix' | 'waveform';
 
+export type XMBContextInfo =
+  | 'xmb_menu'
+  | 'music_sublist'
+  | 'music_player'
+  | 'video_player'
+  | 'game';
+
 export interface Track {
   id: string;
   title: string;

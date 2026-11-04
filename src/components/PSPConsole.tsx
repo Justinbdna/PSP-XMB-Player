@@ -1,10 +1,19 @@
 import React, { useState, useCallback } from 'react';
 import { WaveBackground } from './WaveBackground';
 import { XMBMenu } from './XMBMenu';
-import { PSPTheme, PSP_OFFICIAL_THEMES } from '../types/xmb';
+import { PSPTheme, PSP_OFFICIAL_THEMES, XMBContextInfo } from '../types/xmb';
 import { useAudio } from './AudioEngine';
 import { sound } from '../services/sound';
 import { useGamepad } from '../hooks/useGamepad';
+
+// Dictionnaire des textes de didacticiel / raccourcis contextuels PSP
+const CONTEXT_HELP_TEXTS: Record<XMBContextInfo, string> = {
+  xmb_menu: '🎮 D-Pad / Flèches : Naviguer • ✕ : Ouvrir / Valider • □ : Lecture rapide • △ : Options',
+  music_sublist: '🎮 ▲/▼ : Choisir piste • ✕ : Lancer lecture • ◯ : Dossier parent • △ : Options dossier',
+  music_player: '🎮 L/R : Piste préc./suiv. • ✕ / □ : Play/Pause • ◯ : Retour sous-liste • △ : Options / Visualiseur • SELECT : Visualiseur direct',
+  video_player: '🎮 ◄/► : Reculer / Avancer (10s) • ✕ / □ : Play/Pause • ◯ : Quitter vidéo • △ : Ratio d\'aspect',
+  game: '🎮 Souris / Trackpad : Déplacer raquette • Clic / ✕ : Lancer balle • SELECT : Mixeur multipiste • ◯ : Quitter jeu',
+};
 
 // Chassis Configuration allowing easy switching between models/colors later
 export const PSP_CHASSIS_CONFIG = {
@@ -56,6 +65,7 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
     timestamp: number;
   } | null>(null);
 
+  const [activeContext, setActiveContext] = useState<XMBContextInfo>('xmb_menu');
 
   const { togglePlay, showVolumeOSD, volume } = useAudio();
   const [powerOn] = useState<boolean>(true);
@@ -198,6 +208,7 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
                 onThemeChange={setTheme}
                 externalCommand={externalCommand}
                 debugHitboxes={debugHitboxes}
+                onContextChange={setActiveContext}
               />
 
               {/* Authentic PSP Volume OSD Overlay */}
@@ -409,25 +420,9 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
         </div>
       </div>
 
-      {/* SHORTCUTS & ACCESSIBILITY BAR */}
-      <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-xs text-white/50 bg-white/[0.03] border border-white/10 px-5 py-2 rounded-full">
-        <span>🎮 <b className="text-white/80">Manette connectée</b> (auto-détection)</span>
-        <span>•</span>
-        <span>⌨️ <b className="text-white/80">Flèches</b> : Naviguer</span>
-        <span>•</span>
-        <span><b className="text-cyan-400">L / R (Q / E)</b> : Précédent / Suivant</span>
-        <span>•</span>
-        <span><b className="text-blue-400">X / Entrée</b> : Valider / Lecture</span>
-        <span>•</span>
-        <span><b className="text-red-400">O / Échap</b> : Retour</span>
-        <span>•</span>
-        <span><b className="text-pink-400">▢ / Espace</b> : Play / Pause</span>
-        <span>•</span>
-        <span><b className="text-emerald-400">△ / T</b> : Options</span>
-        <span>•</span>
-        <span><b className="text-amber-400">SELECT / Tab</b> : Visualiseur</span>
-        <span>•</span>
-        <span><b className="text-white/80">H</b> : PS Home</span>
+      {/* SHORTCUTS & ACCESSIBILITY BAR (LÉGENDE CONTEXTUELLE DYNAMIQUE) */}
+      <div className="max-w-4xl mx-auto mt-4 px-5 py-2 bg-black/40 hover:bg-black/80 backdrop-blur-xl border border-white/5 hover:border-white/10 rounded-full transition-all duration-300 opacity-30 hover:opacity-100 flex items-center justify-center gap-2 text-[11px] font-mono text-white/70 select-none shadow-lg text-center flex-wrap">
+        <span>{CONTEXT_HELP_TEXTS[activeContext]}</span>
       </div>
     </div>
   );
