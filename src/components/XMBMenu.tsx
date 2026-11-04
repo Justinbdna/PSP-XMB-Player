@@ -77,6 +77,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     duration: 0,
   });
   const [showVideoHUD, setShowVideoHUD] = useState<boolean>(true);
+  const [videoAspectMode, setVideoAspectMode] = useState<'contain' | 'cover'>('contain');
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const hudTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -244,6 +245,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     videosList,
     currentVideo,
     isVideoPlaying,
+    videoAspectMode,
     gamesList,
     currentGame,
     officialThemesList,
@@ -266,6 +268,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       videosList,
       currentVideo,
       isVideoPlaying,
+      videoAspectMode,
       gamesList,
       currentGame,
       officialThemesList,
@@ -364,8 +367,13 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     const s = stateRef.current;
     if (s.isSearchModalOpen) return;
 
-    // Si le volet d'options est ouvert, fermer avec gauche/droite
+    // Si le volet d'options est ouvert
     if (s.isOptionsOpen) {
+      if (s.viewMode === 'video_player' && (dir === 'left' || dir === 'right')) {
+        sound.playTick();
+        setVideoAspectMode((prev) => (prev === 'contain' ? 'cover' : 'contain'));
+        return;
+      }
       if (dir === 'left' || dir === 'right') {
         setIsOptionsOpen(false);
       }
@@ -466,6 +474,17 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   const handleValidate = () => {
     const s = stateRef.current;
     if (s.isSearchModalOpen) return;
+
+    // Si le volet d'options est ouvert pendant la lecture vidéo, alterner le mode d'affichage
+    if (s.isOptionsOpen) {
+      if (s.viewMode === 'video_player') {
+        sound.playEnter();
+        setVideoAspectMode((prev) => (prev === 'contain' ? 'cover' : 'contain'));
+        return;
+      }
+      setIsOptionsOpen(false);
+      return;
+    }
 
     sound.playEnter();
 
@@ -746,13 +765,15 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
           }}
           onMouseMove={triggerVideoHUD}
         >
-          {/* Native HTML5 16:9 Video with object-cover */}
+          {/* Native HTML5 Video with authentic pillarbox / zoom support */}
           <video
             ref={videoRef}
             src={currentVideo.url}
             autoPlay
             playsInline
-            className="w-full h-full object-cover bg-black"
+            className={`w-full h-full ${
+              videoAspectMode === 'contain' ? 'object-contain' : 'object-cover'
+            } bg-black`}
             onTimeUpdate={() => {
               if (videoRef.current) {
                 setVideoProgress({
@@ -1320,12 +1341,46 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                     <span className="font-semibold text-white truncate block">{currentVideo.title}</span>
                   </div>
                   <div>
-                    <span className="text-white/40 block text-[7.5px] uppercase">Codec</span>
-                    <span className="text-cyan-300 font-mono text-[8px]">{currentVideo.codec || 'MPEG-4 AVC'}</span>
+                    <span className="text-white/40 block text-[7.5px] uppercase mb-1">Format écran</span>
+                    <div
+                      onClick={() => {
+                        sound.playEnter();
+                        setVideoAspectMode((prev) => (prev === 'contain' ? 'cover' : 'contain'));
+                      }}
+                      className="flex items-center gap-1 p-1 rounded bg-white/10 hover:bg-white/15 cursor-pointer border border-white/15 transition-all"
+                    >
+                      <span
+                        className={`flex-1 text-center py-0.5 rounded text-[8px] font-bold transition-all ${
+                          videoAspectMode === 'contain'
+                            ? 'bg-cyan-400 text-black shadow'
+                            : 'text-white/60 hover:text-white'
+                        }`}
+                      >
+                        Normal (4:3 / 16:9)
+                      </span>
+                      <span
+                        className={`flex-1 text-center py-0.5 rounded text-[8px] font-bold transition-all ${
+                          videoAspectMode === 'cover'
+                            ? 'bg-cyan-400 text-black shadow'
+                            : 'text-white/60 hover:text-white'
+                        }`}
+                      >
+                        Plein écran (Zoom)
+                      </span>
+                    </div>
+                    <span className="text-[7px] text-white/40 mt-1 block font-mono">
+                      ✕ ou ◄/► pour alterner
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-white/40 block text-[7.5px] uppercase">Rendu actif</span>
+                    <span className="text-cyan-300 font-mono text-[8px]">
+                      {videoAspectMode === 'contain' ? 'Pillarbox Original' : 'Zoom Étendu 16:9'}
+                    </span>
                   </div>
                   <div>
                     <span className="text-white/40 block text-[7.5px] uppercase">Résolution</span>
-                    <span className="text-white/70 font-mono text-[8px]">480 × 272 (16:9)</span>
+                    <span className="text-white/70 font-mono text-[8px]">480 × 272 (LCD PSP)</span>
                   </div>
                 </>
               ) : viewMode === 'game_screen' && currentGame ? (
