@@ -909,6 +909,15 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   useEffect(() => {
     if (!externalCommand) return;
     const { action } = externalCommand;
+
+    // Si le jeu plein écran est actif, déléguer exclusivement les commandes au composant jeu
+    if (stateRef.current.viewMode === 'game_screen') {
+      if (action === 'home') {
+        handleExitGame();
+      }
+      return;
+    }
+
     if (action === 'up' || action === 'down' || action === 'left' || action === 'right') {
       handleNav(action);
     } else if (action === 'trigger_l') {
@@ -926,13 +935,9 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     } else if (action === 'home') {
       handleHome();
     } else if (action === 'select') {
-      if (stateRef.current.viewMode !== 'game_screen') {
-        handleSelect();
-      }
+      handleSelect();
     } else if (action === 'start') {
-      if (stateRef.current.viewMode !== 'game_screen') {
-        togglePlay();
-      }
+      togglePlay();
     }
   }, [externalCommand]);
 
@@ -940,6 +945,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (stateRef.current.isSearchModalOpen && e.target instanceof HTMLInputElement) return;
+      if (stateRef.current.viewMode === 'game_screen') return;
 
       const key = e.key.toLowerCase();
 

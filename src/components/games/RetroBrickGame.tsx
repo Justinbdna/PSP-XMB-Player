@@ -18,9 +18,9 @@ interface Brick {
 }
 
 const TRACKS = [
-  { id: 'master', label: 'MASTER' },
-  { id: 'bgm', label: 'BGM (MUSIQUE)' },
-  { id: 'sfx', label: 'SFX (BRUITAGES)' },
+  { id: 'master', label: 'Général' },
+  { id: 'bgm', label: 'Musique' },
+  { id: 'sfx', label: 'Bruitages' },
 ];
 
 interface Particle {
@@ -65,27 +65,27 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
     };
   }, []);
 
-  // Réglage du volume par palier de 10%
+  // Réglage du volume par pas de 5 % (0.05)
   const adjustTrackVolume = useCallback((trackIdx: number, delta: number) => {
     sound.playTick();
     if (trackIdx === 0) {
-      const nextMaster = Math.max(0, Math.min(1, Math.round((masterRef.current + delta) * 10) / 10));
+      const nextMaster = Math.max(0, Math.min(1, Math.round((masterRef.current + delta) * 20) / 20));
       setMasterVolume(nextMaster);
       setEngineVolume(Math.round(nextMaster * bgmRef.current * 100) / 100);
       sound.setVolume(Math.round(nextMaster * sfxRef.current * 100) / 100);
     } else if (trackIdx === 1) {
-      const nextBgm = Math.max(0, Math.min(1, Math.round((bgmRef.current + delta) * 10) / 10));
+      const nextBgm = Math.max(0, Math.min(1, Math.round((bgmRef.current + delta) * 20) / 20));
       setBgmVolume(nextBgm);
       setEngineVolume(Math.round(masterRef.current * nextBgm * 100) / 100);
     } else if (trackIdx === 2) {
-      const nextSfx = Math.max(0, Math.min(1, Math.round((sfxRef.current + delta) * 10) / 10));
+      const nextSfx = Math.max(0, Math.min(1, Math.round((sfxRef.current + delta) * 20) / 20));
       setSfxVolume(nextSfx);
       sound.setVolume(Math.round(masterRef.current * nextSfx * 100) / 100);
     }
   }, [setEngineVolume]);
 
   const renderAsciiBar = (value: number): string => {
-    const totalBars = 10;
+    const totalBars = 20; // Jauge haute précision par tranche de 5 %
     const filledBars = Math.max(0, Math.min(totalBars, Math.round(value * totalBars)));
     const filled = '█'.repeat(filledBars);
     const empty = '░'.repeat(totalBars - filledBars);
@@ -210,6 +210,7 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
 
   // Mise à jour fluide de la position de la raquette au trackpad / souris / tactile
   const updatePaddlePosition = (clientX: number) => {
+    if (isMixerOpenRef.current) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -238,11 +239,13 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
   };
 
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (isMixerOpenRef.current) return;
     updatePaddlePosition(e.clientX);
     launchBall();
   };
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (isMixerOpenRef.current) return;
     updatePaddlePosition(e.clientX);
     launchBall();
   };
@@ -264,7 +267,7 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
         return;
       }
 
-      // Si le mixeur est ouvert : navigation et réglages du mixeur
+      // Si le mixeur est ouvert : navigation et réglages du mixeur par pas de 5 %
       if (isMixerOpenRef.current) {
         if (e.key === 'ArrowUp' || key === 'z' || key === 'w') {
           e.preventDefault();
@@ -276,10 +279,10 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
           sound.playTick();
         } else if (e.key === 'ArrowLeft' || key === 'q' || key === 'a') {
           e.preventDefault();
-          adjustTrackVolume(selectedTrackRef.current, -0.1);
+          adjustTrackVolume(selectedTrackRef.current, -0.05);
         } else if (e.key === 'ArrowRight' || key === 'd') {
           e.preventDefault();
-          adjustTrackVolume(selectedTrackRef.current, 0.1);
+          adjustTrackVolume(selectedTrackRef.current, 0.05);
         } else if (e.key === 'Escape' || e.key === 'Enter' || key === 'x' || key === 'o' || e.key === ' ' || e.key === 'Backspace') {
           e.preventDefault();
           setIsMixerOpen(false);
@@ -345,9 +348,9 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
         setSelectedTrack((prev) => (prev < 2 ? prev + 1 : 0));
         sound.playTick();
       } else if (action === 'left') {
-        adjustTrackVolume(selectedTrackRef.current, -0.1);
+        adjustTrackVolume(selectedTrackRef.current, -0.05);
       } else if (action === 'right') {
-        adjustTrackVolume(selectedTrackRef.current, 0.1);
+        adjustTrackVolume(selectedTrackRef.current, 0.05);
       } else if (action === 'cross' || action === 'circle') {
         setIsMixerOpen(false);
         sound.playBack();
@@ -391,19 +394,13 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
     let animationId: number;
 
     const render = () => {
-      // Pause de la simulation si le mixeur est ouvert
-      if (isMixerOpenRef.current) {
-        animationId = requestAnimationFrame(render);
-        return;
-      }
-
       const g = gameRef.current;
       const W = 480;
       const H = 272;
       const paddleY = H - 24;
 
-      // 1. Mise à jour de la logique physique
-      if (g.state === 'playing') {
+      // 1. Mise à jour de la logique physique (strictement suspendue si le mixeur est ouvert)
+      if (g.state === 'playing' && !isMixerOpenRef.current) {
         // Déplacement raquette au clavier
         const paddleSpeed = 5.2;
         if (g.keys.left) {
@@ -523,14 +520,16 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
         }
       }
 
-      // Mise à jour des particules
-      for (let i = g.particles.length - 1; i >= 0; i--) {
-        const p = g.particles[i];
-        p.x += p.vx;
-        p.y += p.vy;
-        p.alpha -= 0.035;
-        if (p.alpha <= 0) {
-          g.particles.splice(i, 1);
+      // Mise à jour des particules (strictement suspendue si le mixeur est ouvert)
+      if (!isMixerOpenRef.current) {
+        for (let i = g.particles.length - 1; i >= 0; i--) {
+          const p = g.particles[i];
+          p.x += p.vx;
+          p.y += p.vy;
+          p.alpha -= 0.035;
+          if (p.alpha <= 0) {
+            g.particles.splice(i, 1);
+          }
         }
       }
 
@@ -720,7 +719,6 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
     <div
       id="psp-game-viewport"
       className="relative w-full h-full bg-black select-none overflow-hidden flex flex-col justify-between"
-      onClick={launchBall}
     >
       <canvas
         ref={canvasRef}
@@ -734,25 +732,9 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
         className="w-full h-full object-contain bg-black cursor-pointer touch-none"
       />
 
-      {/* Ligne d'aide au bas de l'écran avec bouton mixeur interactif */}
-      <div className="absolute bottom-1 left-2 right-2 flex items-center justify-between text-[8px] font-mono text-white/60 pointer-events-none z-10 tracking-wide">
-        <span>[Trackpad / Souris] Déplacer • [Clic / ✕] Lancer • [◯] Quitter</span>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setIsMixerOpen((prev) => {
-              const next = !prev;
-              if (next) sound.playOption();
-              else sound.playBack();
-              return next;
-            });
-          }}
-          className="pointer-events-auto px-2 py-0.5 rounded bg-black/60 hover:bg-emerald-950/80 active:scale-95 border border-emerald-500/40 text-[8.5px] font-mono text-emerald-300 backdrop-blur-sm transition-all flex items-center space-x-1"
-          title="Ouvrir le mixeur audio (START ou SELECT)"
-        >
-          <span>🎛️</span>
-          <span>MIxEUR [START]</span>
-        </button>
+      {/* Ligne d'aide unique et épurée au bas de l'écran (Chantier 1) */}
+      <div className="absolute bottom-1.5 left-0 right-0 flex items-center justify-center text-[8.5px] font-mono text-white/60 pointer-events-none z-10 tracking-wide">
+        [Trackpad] Déplacer • [Clic / ✕] Lancer • [SELECT] Mixeur • [◯] Quitter
       </div>
 
       {/* Overlay Rétro Mixeur Multipiste */}
@@ -808,26 +790,26 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            adjustTrackVolume(idx, -0.1);
+                            adjustTrackVolume(idx, -0.05);
                           }}
                           className="w-5 h-5 flex items-center justify-center rounded bg-slate-800 hover:bg-slate-700 active:scale-95 text-[11px] text-white border border-white/10"
-                          title="-10%"
+                          title="-5%"
                         >
                           -
                         </button>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            adjustTrackVolume(idx, 0.1);
+                            adjustTrackVolume(idx, 0.05);
                           }}
                           className="w-5 h-5 flex items-center justify-center rounded bg-slate-800 hover:bg-slate-700 active:scale-95 text-[11px] text-white border border-white/10"
-                          title="+10%"
+                          title="+5%"
                         >
                           +
                         </button>
                       </div>
                     </div>
-                    <div className="text-[9.5px] tracking-tight font-mono text-emerald-400/90 pl-3">
+                    <div className="text-[9px] tracking-tight font-mono text-emerald-400/90 pl-3">
                       {renderAsciiBar(val)}
                     </div>
                   </div>
@@ -837,8 +819,8 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
 
             {/* Aide navigation */}
             <div className="pt-1.5 border-t border-emerald-500/20 flex items-center justify-between text-[7.5px] text-slate-400">
-              <span>▲▼ Piste • ◄► -/+</span>
-              <span>[START/SELECT/✕/◯] Fermer</span>
+              <span>▲▼ Canal • ◄► -/+ 5%</span>
+              <span>[SELECT / START / ◯] Fermer</span>
             </div>
           </div>
         </div>
