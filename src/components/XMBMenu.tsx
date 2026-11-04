@@ -908,16 +908,14 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
   // External commands listener (from invisible hotspots & gamepad)
   useEffect(() => {
-    if (!externalCommand) return;
-    const { action } = externalCommand;
-
-    // Si le jeu plein écran est actif, déléguer exclusivement les commandes au composant jeu
-    if (stateRef.current.viewMode === 'game_screen') {
-      if (action === 'home') {
-        handleExitGame();
-      }
+    if (viewMode === 'game_screen') {
+      // Le jeu a le contrôle exclusif de toutes les entrées.
+      // XMBMenu ne doit intercepter AUCUNE flèche, AUCUN bouton directionnel.
       return;
     }
+
+    if (!externalCommand) return;
+    const { action } = externalCommand;
 
     if (action === 'up' || action === 'down' || action === 'left' || action === 'right') {
       handleNav(action);
@@ -944,13 +942,17 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     } else if (action === 'vol_down') {
       adjustVolume(-0.05);
     }
-  }, [externalCommand]);
+  }, [externalCommand, viewMode]);
 
   // Global Keyboard listener
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (viewMode === 'game_screen' || stateRef.current.viewMode === 'game_screen') {
+        // Le jeu a le contrôle exclusif de toutes les entrées.
+        // XMBMenu ne doit intercepter AUCUNE flèche, AUCUN bouton directionnel.
+        return;
+      }
       if (stateRef.current.isSearchModalOpen && e.target instanceof HTMLInputElement) return;
-      if (stateRef.current.viewMode === 'game_screen') return;
 
       const key = e.key.toLowerCase();
 
@@ -995,7 +997,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [viewMode]);
 
   return (
     <div className="relative w-full h-full select-none overflow-hidden text-white font-['Inter',sans-serif]">

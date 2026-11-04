@@ -61,6 +61,10 @@ class SoundService {
     }
   }
 
+  public playCursor() {
+    this.playTick();
+  }
+
   // Authentic Sony PSP validation chime (✕ button)
   public playEnter() {
     if (this.isMuted || this.volume <= 0.001) return;

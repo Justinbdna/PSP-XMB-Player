@@ -4,7 +4,7 @@ import { useAudio } from '../AudioEngine';
 
 interface RetroBrickGameProps {
   onExit: () => void;
-  externalCommand?: { action: string; timestamp: number } | null;
+  externalCommand?: { action: string; timestamp: number } | string | null;
 }
 
 interface Brick {
@@ -40,23 +40,16 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const { setVolume: setEngineVolume } = useAudio();
 
-  // Niveaux de volume indépendants unifiés de 0 à 100 (Chantier 1)
-  const [masterVol, setMasterVol] = useState<number>(100); // 0 à 100
-  const [bgmVol, setBgmVol] = useState<number>(85);        // 0 à 100
-  const [sfxVol, setSfxVol] = useState<number>(100);       // 0 à 100
-  const [isMixerOpen, setIsMixerOpen] = useState<boolean>(false);
+  // 1. États de volume stricts (entiers 0 à 100) :
   const [selectedTrack, setSelectedTrack] = useState<number>(0); // 0: Général, 1: Musique, 2: Bruitages
+  const [masterVol, setMasterVol] = useState<number>(100);
+  const [bgmVol, setBgmVol] = useState<number>(85);
+  const [sfxVol, setSfxVol] = useState<number>(100);
+  const [isMixerOpen, setIsMixerOpen] = useState<boolean>(false);
 
-  const masterVolRef = useRef<number>(100);
-  masterVolRef.current = masterVol;
-  const bgmVolRef = useRef<number>(85);
-  bgmVolRef.current = bgmVol;
-  const sfxVolRef = useRef<number>(100);
-  sfxVolRef.current = sfxVol;
   const isMixerOpenRef = useRef<boolean>(isMixerOpen);
   isMixerOpenRef.current = isMixerOpen;
-  const selectedTrackRef = useRef<number>(selectedTrack);
-  selectedTrackRef.current = selectedTrack;
+  const lastExternalCommandRef = useRef<unknown>(null);
 
   // Réinitialisation du volume des bruitages à la sortie
   useEffect(() => {
@@ -65,86 +58,95 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
     };
   }, []);
 
-  // Transmission décimale propre vers Web Audio (0.0 à 1.0)
-  const applyAudioVolumes = useCallback(
-    (m: number, b: number, s: number) => {
-      const effectiveBgm = (m / 100) * (b / 100); // valeur entre 0.0 et 1.0
-      const effectiveSfx = (m / 100) * (s / 100); // valeur entre 0.0 et 1.0
+  const applyAudioSync = (m: number, b: number, s: number) => {
+    const normBgm = (m / 100) * (b / 100);
+    const normSfx = (m / 100) * (s / 100);
+    setEngineVolume(normBgm, false); // Ne pas afficher l'OSD console
+    try { sound.setVolume(normSfx); } catch (e) {}
+  };
 
-      // Met à jour la musique sans déclencher l'OSD global de la console
-      setEngineVolume(effectiveBgm, false);
+  // 3. Fonction arithmétique stepVolume par pas stricts de 5 % :
+  const stepVolume = (trackIndex: number, delta: number) => {
+    if (trackIndex === 0) {
+      setMasterVol(prev => {
+        const next = Math.max(0, Math.min(100, prev + delta));
+        applyAudioSync(next, bgmVol, sfxVol);
+        return next;
+      });
+    } else if (trackIndex === 1) {
+      setBgmVol(prev => {
+        const next = Math.max(0, Math.min(100, prev + delta));
+        applyAudioSync(masterVol, next, sfxVol);
+        return next;
+      });
+    } else if (trackIndex === 2) {
+      setSfxVol(prev => {
+        const next = Math.max(0, Math.min(100, prev + delta));
+        applyAudioSync(masterVol, bgmVol, next);
+        return next;
+      });
+    }
+  };
 
-      // Met à jour les bruitages de rebond
-      try {
-        sound.setVolume(effectiveSfx);
-      } catch (e) {}
-    },
-    [setEngineVolume]
-  );
+  // 2. Routeur centralisé dispatchMixerAction :
+  const dispatchMixerAction = (action: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT' | 'CLOSE' | 'ENTER') => {
+    switch (action) {
+      case 'UP':
+        try { sound.playCursor(); } catch (e) {}
+        setSelectedTrack(prev => (prev > 0 ? prev - 1 : 2)); // Boucle infinie 0 -> 2 -> 1 -> 0
+        break;
+      case 'DOWN':
+        try { sound.playCursor(); } catch (e) {}
+        setSelectedTrack(prev => (prev < 2 ? prev + 1 : 0));
+        break;
+      case 'LEFT':
+        try { sound.playCursor(); } catch (e) {}
+        stepVolume(selectedTrack, -5); // Strictement -5%
+        break;
+      case 'RIGHT':
+        try { sound.playCursor(); } catch (e) {}
+        stepVolume(selectedTrack, +5); // Strictement +5%
+        break;
+      case 'ENTER':
+        try { sound.playEnter(); } catch (e) {}
+        break;
+      case 'CLOSE':
+        try { sound.playBack(); } catch (e) {}
+        setIsMixerOpen(false);
+        break;
+    }
+  };
 
-  // Fonction de mise à jour unifiée par pas de 5 % (+5 ou -5)
-  const stepChannelVolume = useCallback(
-    (channelIndex: number, delta: number) => {
-      sound.playTick();
-      if (channelIndex === 0) {
-        setMasterVol((prev) => {
-          const next = Math.max(0, Math.min(100, prev + delta));
-          masterVolRef.current = next;
-          applyAudioVolumes(next, bgmVolRef.current, sfxVolRef.current);
-          return next;
-        });
-      } else if (channelIndex === 1) {
-        setBgmVol((prev) => {
-          const next = Math.max(0, Math.min(100, prev + delta));
-          bgmVolRef.current = next;
-          applyAudioVolumes(masterVolRef.current, next, sfxVolRef.current);
-          return next;
-        });
-      } else if (channelIndex === 2) {
-        setSfxVol((prev) => {
-          const next = Math.max(0, Math.min(100, prev + delta));
-          sfxVolRef.current = next;
-          applyAudioVolumes(masterVolRef.current, bgmVolRef.current, next);
-          return next;
-        });
-      }
-    },
-    [applyAudioVolumes]
-  );
-
-  // Sélection rapide d'une piste
-  const selectTrack = useCallback((idx: number) => {
-    selectedTrackRef.current = idx;
+  // Sélection rapide d'une piste au clic
+  const selectTrack = (idx: number) => {
     setSelectedTrack(idx);
-    sound.playTick();
-  }, []);
+    try { sound.playCursor(); } catch (e) {}
+  };
 
   // Réglage direct au clic / glisser sur la jauge
-  const setTrackVolumeDirect = useCallback(
-    (channelIndex: number, clientX: number, gaugeElement: HTMLElement) => {
-      const rect = gaugeElement.getBoundingClientRect();
-      if (rect.width <= 0) return;
-      const pct = Math.max(
-        0,
-        Math.min(100, Math.round(((clientX - rect.left) / rect.width) * 20) * 5)
-      );
-      selectTrack(channelIndex);
-      if (channelIndex === 0) {
-        setMasterVol(pct);
-        masterVolRef.current = pct;
-        applyAudioVolumes(pct, bgmVolRef.current, sfxVolRef.current);
-      } else if (channelIndex === 1) {
-        setBgmVol(pct);
-        bgmVolRef.current = pct;
-        applyAudioVolumes(masterVolRef.current, pct, sfxVolRef.current);
-      } else if (channelIndex === 2) {
-        setSfxVol(pct);
-        sfxVolRef.current = pct;
-        applyAudioVolumes(masterVolRef.current, bgmVolRef.current, pct);
-      }
-    },
-    [applyAudioVolumes, selectTrack]
-  );
+  const setTrackVolumeDirect = (
+    channelIndex: number,
+    clientX: number,
+    gaugeElement: HTMLElement
+  ) => {
+    const rect = gaugeElement.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const pct = Math.max(
+      0,
+      Math.min(100, Math.round(((clientX - rect.left) / rect.width) * 20) * 5)
+    );
+    selectTrack(channelIndex);
+    if (channelIndex === 0) {
+      setMasterVol(pct);
+      applyAudioSync(pct, bgmVol, sfxVol);
+    } else if (channelIndex === 1) {
+      setBgmVol(pct);
+      applyAudioSync(masterVol, pct, sfxVol);
+    } else if (channelIndex === 2) {
+      setSfxVol(pct);
+      applyAudioSync(masterVol, bgmVol, pct);
+    }
+  };
 
   const [highScore, setHighScore] = useState<number>(() => {
     try {
@@ -303,69 +305,64 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
     launchBall();
   };
 
-  // Contrôles clavier
+  // 1. Écouteur Clavier du Mixeur (prioritaire et capturant) :
   useEffect(() => {
+    if (!isMixerOpen) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      // Empêcher toute fuite vers le navigateur ou le parent
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Enter', 'Escape', 'Tab'].includes(e.code) || ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
+
+      if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'z') dispatchMixerAction('UP');
+      else if (e.key === 'ArrowDown' || e.key === 's') dispatchMixerAction('DOWN');
+      else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'q') dispatchMixerAction('LEFT');
+      else if (e.key === 'ArrowRight' || e.key === 'd') dispatchMixerAction('RIGHT');
+      else if (e.key === 'Enter') dispatchMixerAction('ENTER');
+      else if (e.key === 'Escape' || e.key === 'Tab') dispatchMixerAction('CLOSE');
+    };
+
+    window.addEventListener('keydown', onKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
+  }, [isMixerOpen, selectedTrack, masterVol, bgmVol, sfxVol]);
+
+  // Contrôles clavier en jeu (quand le mixeur est fermé)
+  useEffect(() => {
+    if (isMixerOpen) return;
+
     const onKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
 
-      // Touches d'ouverture/fermeture du mixeur audio
       if (key === 'tab' || key === 'v' || key === 'p') {
         e.preventDefault();
         e.stopPropagation();
-        setIsMixerOpen((prev) => {
-          const next = !prev;
-          isMixerOpenRef.current = next;
-          if (next) sound.playOption();
-          else sound.playBack();
-          return next;
-        });
+        try { sound.playOption(); } catch (err) {}
+        setIsMixerOpen(true);
         return;
       }
 
-      // Si le mixeur est ouvert : navigation et réglages du mixeur par pas de 5 %
-      if (isMixerOpenRef.current) {
+      if (e.key === 'ArrowLeft' || key === 'q' || key === 'a') {
         e.preventDefault();
-        e.stopPropagation();
-
-        if (e.key === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ' || key === 'z' || key === 'w') {
-          const next = selectedTrackRef.current > 0 ? selectedTrackRef.current - 1 : 2;
-          selectTrack(next);
-        } else if (e.key === 'ArrowDown' || e.code === 'KeyS' || key === 's') {
-          const next = selectedTrackRef.current < 2 ? selectedTrackRef.current + 1 : 0;
-          selectTrack(next);
-        } else if (e.key === 'ArrowLeft' || e.code === 'KeyA' || e.code === 'KeyQ' || key === 'q' || key === 'a') {
-          stepChannelVolume(selectedTrackRef.current, -5);
-        } else if (e.key === 'ArrowRight' || e.code === 'KeyD' || key === 'd') {
-          stepChannelVolume(selectedTrackRef.current, 5);
-        } else if (e.key === 'Enter' || key === 'x') {
-          sound.playEnter();
-          // La touche ✕ / Entrée valide uniquement, ne ferme JAMAIS le mixeur
-        } else if (e.key === 'Escape' || key === 'o' || e.key === 'Backspace') {
-          setIsMixerOpen(false);
-          isMixerOpenRef.current = false;
-          sound.playBack();
-        }
-        return;
-      }
-
-      // Contrôles normaux en jeu
-      if (e.key === 'ArrowLeft' || key === 'q') {
         gameRef.current.keys.left = true;
       } else if (e.key === 'ArrowRight' || key === 'd') {
+        e.preventDefault();
         gameRef.current.keys.right = true;
       } else if (e.key === 'Enter' || key === 'x' || e.key === ' ') {
         e.preventDefault();
         launchBall();
       } else if (e.key === 'Escape' || key === 'o' || e.key === 'Backspace') {
         e.preventDefault();
-        sound.playBack();
+        try { sound.playBack(); } catch (err) {}
         onExit();
       }
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
-      if (e.key === 'ArrowLeft' || key === 'q') {
+      if (e.key === 'ArrowLeft' || key === 'q' || key === 'a') {
         gameRef.current.keys.left = false;
       } else if (e.key === 'ArrowRight' || key === 'd') {
         gameRef.current.keys.right = false;
@@ -378,83 +375,58 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [onExit, launchBall, selectTrack, stepChannelVolume]);
+  }, [isMixerOpen, onExit, launchBall]);
 
-  // Commandes externes issues des boutons matériels PSP
+  // 2. Écouteur Commandes D-Pad / PSP (externalCommand) :
   useEffect(() => {
     if (!externalCommand) return;
-    const { action } = externalCommand;
+    if (lastExternalCommandRef.current === externalCommand) return;
+    lastExternalCommandRef.current = externalCommand;
 
-    // Bascule du mixeur audio sur START ou SELECT
-    if (action === 'start' || action === 'select') {
-      setIsMixerOpen((prev) => {
-        const next = !prev;
-        isMixerOpenRef.current = next;
-        if (next) sound.playOption();
-        else sound.playBack();
-        return next;
-      });
-      return;
-    }
+    const rawCmd = typeof externalCommand === 'string' ? externalCommand : externalCommand.action;
+    const cmd = rawCmd.toLowerCase();
 
-    // Si le mixeur est actif
-    if (isMixerOpenRef.current) {
-      if (action === 'up' || action === 'dpad_up') {
-        const next = selectedTrackRef.current > 0 ? selectedTrackRef.current - 1 : 2;
-        selectTrack(next);
-      } else if (action === 'down' || action === 'dpad_down') {
-        const next = selectedTrackRef.current < 2 ? selectedTrackRef.current + 1 : 0;
-        selectTrack(next);
-      } else if (action === 'left' || action === 'dpad_left') {
-        stepChannelVolume(selectedTrackRef.current, -5);
-      } else if (action === 'right' || action === 'dpad_right') {
-        stepChannelVolume(selectedTrackRef.current, 5);
-      } else if (action === 'vol_up') {
-        stepChannelVolume(selectedTrackRef.current, 5);
-      } else if (action === 'vol_down') {
-        stepChannelVolume(selectedTrackRef.current, -5);
-      } else if (action === 'cross') {
-        sound.playEnter(); // Valide uniquement, ne ferme JAMAIS le mixeur
-      } else if (action === 'circle') {
-        setIsMixerOpen(false);
-        isMixerOpenRef.current = false;
-        sound.playBack();
+    if (!isMixerOpen) {
+      if (cmd === 'select' || cmd === 'start') {
+        try { sound.playOption(); } catch (e) {}
+        setIsMixerOpen(true);
+      } else if (cmd === 'vol_up') {
+        stepVolume(0, +5);
+      } else if (cmd === 'vol_down') {
+        stepVolume(0, -5);
+      } else if (cmd === 'left' || cmd === 'dpad_left') {
+        gameRef.current.paddleX = Math.max(10, gameRef.current.paddleX - 28);
+        if (gameRef.current.ballAttached) {
+          gameRef.current.ballX = gameRef.current.paddleX + gameRef.current.paddleW / 2;
+        }
+        try { sound.playCursor(); } catch (e) {}
+      } else if (cmd === 'right' || cmd === 'dpad_right') {
+        gameRef.current.paddleX = Math.min(
+          480 - 10 - gameRef.current.paddleW,
+          gameRef.current.paddleX + 28
+        );
+        if (gameRef.current.ballAttached) {
+          gameRef.current.ballX = gameRef.current.paddleX + gameRef.current.paddleW / 2;
+        }
+        try { sound.playCursor(); } catch (e) {}
+      } else if (cmd === 'cross') {
+        launchBall();
+      } else if (cmd === 'circle' || cmd === 'home') {
+        try { sound.playBack(); } catch (e) {}
+        onExit();
       }
       return;
     }
 
-    // Commandes physiques de volume en jeu standard (mixeur fermé -> règle Général)
-    if (action === 'vol_up') {
-      stepChannelVolume(0, 5);
-      return;
-    } else if (action === 'vol_down') {
-      stepChannelVolume(0, -5);
-      return;
-    }
-
-    // Commandes en jeu standard
-    if (action === 'left' || action === 'dpad_left') {
-      gameRef.current.paddleX = Math.max(10, gameRef.current.paddleX - 28);
-      if (gameRef.current.ballAttached) {
-        gameRef.current.ballX = gameRef.current.paddleX + gameRef.current.paddleW / 2;
-      }
-      sound.playTick();
-    } else if (action === 'right' || action === 'dpad_right') {
-      gameRef.current.paddleX = Math.min(
-        480 - 10 - gameRef.current.paddleW,
-        gameRef.current.paddleX + 28
-      );
-      if (gameRef.current.ballAttached) {
-        gameRef.current.ballX = gameRef.current.paddleX + gameRef.current.paddleW / 2;
-      }
-      sound.playTick();
-    } else if (action === 'cross') {
-      launchBall();
-    } else if (action === 'circle') {
-      sound.playBack();
-      onExit();
-    }
-  }, [externalCommand, onExit, launchBall, selectTrack, stepChannelVolume]);
+    // Si le mixeur est ouvert :
+    if (cmd === 'up' || cmd === 'dpad_up') dispatchMixerAction('UP');
+    else if (cmd === 'down' || cmd === 'dpad_down') dispatchMixerAction('DOWN');
+    else if (cmd === 'left' || cmd === 'dpad_left' || cmd === 'vol_down') dispatchMixerAction('LEFT');
+    else if (cmd === 'right' || cmd === 'dpad_right' || cmd === 'vol_up') dispatchMixerAction('RIGHT');
+    else if (cmd === 'cross') dispatchMixerAction('ENTER');
+    else if (cmd === 'circle' || cmd === 'select' || cmd === 'start') dispatchMixerAction('CLOSE');
+    else if (cmd === 'home') onExit();
+  }, [externalCommand, isMixerOpen, selectedTrack, masterVol, bgmVol, sfxVol]);
 
   // Boucle de rendu Canvas 2D (480x272 pixels natifs PSP)
   useEffect(() => {
