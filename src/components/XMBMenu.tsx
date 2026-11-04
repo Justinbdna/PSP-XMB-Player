@@ -714,10 +714,11 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     }
   };
 
-  // Déclencheur dédié et autonome pour lancer le mini-jeu proprement (Chantier 1)
+  // Déclencheur dédié et autonome pour lancer le mini-jeu proprement (Chantier 1 & 2)
   const launchRetroGame = (gameItem?: any) => {
-    const targetGame = gameItem || gamesList[0] || { id: 'game-1', title: 'Mini Jeu Rétro' };
+    try { sound.playEnter(); } catch (e) {} // Ne doit jamais bloquer l'exécution
     pauseTrack();
+    const targetGame = gameItem || gamesList[0] || { id: 'game-1', title: 'Mini Jeu Rétro' };
     setCurrentGame(targetGame);
     pushState('game_screen', 'game');
   };
@@ -1320,21 +1321,31 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
               >
                 {activeItems.map((item, idx) => {
                   const isSelected = idx === itemIndex;
+                  const isGame = item.id === 'game-1' || item.type === 'game';
                   return (
                     <div
                       key={item.id}
+                      onPointerDown={(e) => {
+                        if (isGame) {
+                          e.stopPropagation();
+                          setItemIndex(idx);
+                          stateRef.current.itemIndex = idx;
+                          launchRetroGame(item);
+                        }
+                      }}
                       onClick={(e) => {
                         e.stopPropagation();
                         setItemIndex(idx);
                         stateRef.current.itemIndex = idx;
-                        if (item.id === 'game-1' || item.type === 'game') {
-                          sound.playEnter();
+                        if (isGame) {
                           launchRetroGame(item);
                         } else {
                           handleValidate(idx);
                         }
                       }}
-                      className={`h-11 flex items-center px-3 gap-3 rounded-lg cursor-pointer transition-all duration-200 ${
+                      className={`h-11 flex items-center px-3 gap-3 rounded-lg cursor-pointer select-none transition-all duration-200 ${
+                        isGame ? 'relative z-30' : ''
+                      } ${
                         isSelected
                           ? 'bg-gradient-to-r from-white/25 via-white/10 to-transparent border-l-3 border-white shadow-[0_0_15px_rgba(255,255,255,0.2)]'
                           : 'opacity-40 hover:opacity-75'
@@ -1432,14 +1443,19 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                     return (
                       <div
                         key={game.id}
+                        onPointerDown={(e) => {
+                          e.stopPropagation();
+                          setSubItemIndex(idx);
+                          stateRef.current.subItemIndex = idx;
+                          launchRetroGame(game);
+                        }}
                         onClick={(e) => {
                           e.stopPropagation();
                           setSubItemIndex(idx);
                           stateRef.current.subItemIndex = idx;
-                          sound.playEnter();
                           launchRetroGame(game);
                         }}
-                        className={`h-12 flex items-center px-3 gap-2.5 rounded-lg cursor-pointer transition-all duration-200 ${
+                        className={`h-12 flex items-center px-3 gap-2.5 rounded-lg cursor-pointer select-none relative z-30 transition-all duration-200 ${
                           isSelected
                             ? 'bg-gradient-to-r from-white/30 via-white/15 to-transparent border-l-3 border-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.3)]'
                             : 'opacity-45 hover:opacity-75'

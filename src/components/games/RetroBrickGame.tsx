@@ -94,7 +94,7 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
   };
 
   const startNewGame = () => {
-    sound.playEnter();
+    try { sound.playEnter(); } catch (e) {}
     const g = gameRef.current;
     g.state = 'playing';
     g.paddleX = 208;
@@ -102,8 +102,8 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
     g.ballX = 240;
     g.ballY = paddleY - g.ballRadius - 1;
     g.ballAttached = false;
-    g.ballVx = (Math.random() > 0.5 ? 1 : -1) * (2.4 + Math.random() * 0.8);
-    g.ballVy = -3.0;
+    g.ballVx = (Math.random() > 0.5 ? 1 : -1) * 3;
+    g.ballVy = -4;
     g.bricks = initBricks();
     g.particles = [];
     g.score = 0;
@@ -116,11 +116,14 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
       startNewGame();
       return;
     }
-    if (g.state === 'playing' && g.ballAttached) {
-      g.ballAttached = false;
-      sound.playEnter();
-      g.ballVx = (Math.random() > 0.5 ? 1 : -1) * (2.4 + Math.random() * 0.8);
-      g.ballVy = -3.2;
+    if (g.state === 'playing') {
+      if (g.ballAttached) {
+        g.ballAttached = false;
+        try { sound.playEnter(); } catch (e) {}
+        // Impulsion initiale de la balle
+        g.ballVx = 3;
+        g.ballVy = -4;
+      }
     }
   };
 

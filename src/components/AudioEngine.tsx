@@ -53,6 +53,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
 
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const currentTrackRef = useRef<Track | null>(null);
@@ -241,12 +242,18 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
   }, []);
 
-  // Synchronisation dynamique du volume sur les deux instances (hors animation de fondu)
+  // Synchronisation dynamique du volume sur les deux instances et Master Gain
   useEffect(() => {
     volumeRef.current = volume;
+    if (gainNodeRef.current && audioCtxRef.current) {
+      gainNodeRef.current.gain.setValueAtTime(volume, audioCtxRef.current.currentTime);
+    }
     if (!isFadingRef.current) {
       if (directAudioRef.current) directAudioRef.current.volume = volume;
-      if (localAudioRef.current) localAudioRef.current.volume = volume;
+      if (localAudioRef.current) {
+        localAudioRef.current.volume = volume;
+        localAudioRef.current.muted = false;
+      }
     }
   }, [volume]);
 
@@ -319,7 +326,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
       activeTypeRef.current = 'local';
 
-      // Initialisation paresseuse de l'AudioContext lors du premier fichier local
+      // Initialisation paresseuse de l'AudioContext et du Master Gain lors du premier fichier local
       if (!audioCtxRef.current) {
         const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
         if (AudioCtxClass) {
@@ -327,12 +334,22 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           const analyser = ctx.createAnalyser();
           analyser.fftSize = 512;
           analyser.smoothingTimeConstant = 0.75;
+          const gain = ctx.createGain();
+          gain.gain.setValueAtTime(volumeRef.current, ctx.currentTime);
           audioCtxRef.current = ctx;
           analyserRef.current = analyser;
+          gainNodeRef.current = gain;
         }
-      } else if (analyserRef.current) {
-        analyserRef.current.fftSize = 512;
-        analyserRef.current.smoothingTimeConstant = 0.75;
+      } else {
+        if (analyserRef.current) {
+          analyserRef.current.fftSize = 512;
+          analyserRef.current.smoothingTimeConstant = 0.75;
+        }
+        if (!gainNodeRef.current && audioCtxRef.current) {
+          const gain = audioCtxRef.current.createGain();
+          gain.gain.setValueAtTime(volumeRef.current, audioCtxRef.current.currentTime);
+          gainNodeRef.current = gain;
+        }
       }
 
       // Réveil asynchrone de l'AudioContext sur Safari (WebKit)
@@ -344,27 +361,46 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
       }
 
-      // Connexion robuste au nœud d'analyse FFT et à la sortie audio
-      if (localAudioRef.current && audioCtxRef.current && analyserRef.current && !sourceNodeRef.current) {
-        try {
-          const source = audioCtxRef.current.createMediaElementSource(localAudioRef.current);
-          source.connect(analyserRef.current);
-          analyserRef.current.connect(audioCtxRef.current.destination);
-          sourceNodeRef.current = source;
+      // Câblage complet et continu : Source -> Analyser -> Master Gain -> Destination physique
+      if (localAudioRef.current && audioCtxRef.current && analyserRef.current) {
+        if (!sourceNodeRef.current) {
+          try {
+            sourceNodeRef.current = audioCtxRef.current.createMediaElementSource(localAudioRef.current);
+          } catch (e) {
+            console.warn('[AudioEngine] Échec createMediaElementSource :', e);
+          }
+        }
+
+        if (sourceNodeRef.current) {
+          // Déconnexion préventive pour éviter les doublons
+          try { sourceNodeRef.current.disconnect(); } catch (e) {}
+          try { analyserRef.current.disconnect(); } catch (e) {}
+          try { gainNodeRef.current?.disconnect(); } catch (e) {}
+
+          // Câblage complet : Source -> Analyser -> Master Gain -> Destination physique
+          sourceNodeRef.current.connect(analyserRef.current);
+          if (gainNodeRef.current) {
+            analyserRef.current.connect(gainNodeRef.current);
+            gainNodeRef.current.connect(audioCtxRef.current.destination);
+          } else {
+            analyserRef.current.connect(audioCtxRef.current.destination);
+          }
           setActiveAnalyser(analyserRef.current);
           setIsRealDSP(true);
-        } catch (e) {
-          console.warn('[AudioEngine] Échec connexion graphe Web Audio, repli matériel direct :', e);
-          setActiveAnalyser(null);
-          setIsRealDSP(false);
         }
       } else if (analyserRef.current) {
         setActiveAnalyser(analyserRef.current);
         setIsRealDSP(true);
       }
 
+      // Éradication des blocages de volume / fondu : forcer immédiatement le gain et le volume réel
+      if (gainNodeRef.current && audioCtxRef.current) {
+        gainNodeRef.current.gain.setValueAtTime(volumeRef.current, audioCtxRef.current.currentTime);
+      }
+
       if (localAudioRef.current) {
-        localAudioRef.current.volume = 0;
+        localAudioRef.current.volume = volumeRef.current;
+        localAudioRef.current.muted = false;
         localAudioRef.current.src = finalAudioSrc;
         localAudioRef.current.currentTime = 0;
         setDuration(track.durationMs ? track.durationMs / 1000 : 30);
@@ -375,8 +411,15 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           setIsPlaying(true);
           isPlayingRef.current = true;
           setAudioError(null);
-          console.log('[AudioEngine] Lecture locale démarrée avec fondu :', finalAudioSrc);
-          await fadeIn(localAudioRef.current, volumeRef.current, 300);
+          // Log explicite de contrôle
+          console.log(
+            '[AudioEngine] Sortie audio câblée vers destination. State:',
+            audioCtxRef.current?.state,
+            'Gain:',
+            volumeRef.current,
+            'Muted:',
+            localAudioRef.current.muted
+          );
         } catch (err) {
           console.warn('[AudioEngine] Lecture locale empêchée par le navigateur :', err);
           setIsPlaying(false);
@@ -491,12 +534,15 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (isPlaying) {
       pauseTrack();
     } else {
-      audio.volume = 0;
+      audio.volume = volumeRef.current;
+      audio.muted = false;
+      if (gainNodeRef.current && audioCtxRef.current) {
+        gainNodeRef.current.gain.setValueAtTime(volumeRef.current, audioCtxRef.current.currentTime);
+      }
       audio.play().then(() => {
         setIsPlaying(true);
         isPlayingRef.current = true;
         setAudioError(null);
-        fadeIn(audio, volumeRef.current, 250);
       }).catch((err) => {
         console.warn('[AudioEngine] Reprise échouée:', err);
         setIsPlaying(false);
@@ -517,9 +563,15 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const clamped = Math.max(0, Math.min(1, Math.round(val * 100) / 100));
     volumeRef.current = clamped;
     setVolumeState(clamped);
+    if (gainNodeRef.current && audioCtxRef.current) {
+      gainNodeRef.current.gain.setValueAtTime(clamped, audioCtxRef.current.currentTime);
+    }
     if (!isFadingRef.current) {
       if (directAudioRef.current) directAudioRef.current.volume = clamped;
-      if (localAudioRef.current) localAudioRef.current.volume = clamped;
+      if (localAudioRef.current) {
+        localAudioRef.current.volume = clamped;
+        localAudioRef.current.muted = false;
+      }
     }
     triggerVolumeOSD();
   };
