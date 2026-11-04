@@ -1,14 +1,18 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { AudioProvider } from './components/AudioEngine';
 import { PSPConsole } from './components/PSPConsole';
-
-// En production sur main, aucun panneau ni artefact de debug n'est rendu
-const ENABLE_DEBUG = true;
+import { StagingDebugPanel } from './components/debug/StagingDebugPanel';
 
 export const App: React.FC = () => {
+  const [showHitboxes, setShowHitboxes] = useState<boolean>(false);
+
   return (
     <AudioProvider>
-      <PSPConsole debugHitboxes={ENABLE_DEBUG} />
+      <PSPConsole debugHitboxes={showHitboxes} />
+      <StagingDebugPanel
+        debugHitboxes={showHitboxes}
+        onToggleHitboxes={setShowHitboxes}
+      />
     </AudioProvider>
   );
 };
