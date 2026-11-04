@@ -6,8 +6,9 @@ export interface Track {
   previewUrl: string;
   artworkUrl: string;
   durationMs?: number;
+  url?: string;
   youtubeId?: string;
-  sourceType?: 'itunes' | 'youtube' | 'local';
+  sourceType?: 'itunes' | 'local' | 'youtube';
   bpm?: number;
 }
 

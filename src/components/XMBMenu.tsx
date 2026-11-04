@@ -50,14 +50,11 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     currentTime,
     duration,
     volume,
-    isYouTubeActive,
     audioError,
-    analyser,
     playTrack,
     pauseTrack,
     togglePlay,
     seekRelative,
-    resumeAudioContext,
   } = useAudio();
 
   // Navigation View & Stack
@@ -478,9 +475,6 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   const handleValidate = () => {
     const s = stateRef.current;
     if (s.isSearchModalOpen) return;
-
-    // Réveil immédiat de l'AudioContext lors d'une interaction utilisateur (touche ✕)
-    resumeAudioContext();
 
     // Si le volet d'options est ouvert pendant la lecture vidéo, alterner le mode d'affichage
     if (s.isOptionsOpen) {
@@ -917,7 +911,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                   </span>
                 )}
                 <span className="text-[8px] font-mono text-white/40">
-                  {isYouTubeActive ? 'YOUTUBE AUDIO STREAM (FULL)' : 'AAC 256kbps • 44.1kHz'}
+                  AAC 256kbps • 44.1kHz
                 </span>
               </div>
 
@@ -930,12 +924,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
               {/* Dynamic Rhythmic Spectrum Visualizer */}
               <div className="w-full bg-black/40 backdrop-blur-sm rounded-lg p-1 border border-white/10 shadow-inner">
-                <AudioVisualizer
-                  isPlaying={isPlaying}
-                  analyser={analyser}
-                  isYouTube={isYouTubeActive}
-                  bpm={currentTrack.bpm || 120}
-                />
+                <AudioVisualizer isPlaying={isPlaying} />
               </div>
             </div>
           </div>
@@ -1348,10 +1337,8 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                     <span className="text-white/80 truncate block">{currentTrack.artist}</span>
                   </div>
                   <div>
-                    <span className="text-white/40 block text-[7.5px] uppercase">Format & Source</span>
-                    <span className="text-emerald-300 font-mono text-[8px]">
-                      {isYouTubeActive ? 'Passerelle YouTube Audio (Full/90s)' : 'AAC 256kbps • 44.1kHz (iTunes Store)'}
-                    </span>
+                    <span className="text-white/40 block text-[7.5px] uppercase">Format</span>
+                    <span className="text-emerald-300 font-mono text-[8px]">AAC 256kbps • 44.1kHz</span>
                   </div>
                 </>
               ) : viewMode === 'video_player' && currentVideo ? (
