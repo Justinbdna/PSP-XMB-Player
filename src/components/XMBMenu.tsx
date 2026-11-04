@@ -504,26 +504,21 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     setNavStack([]);
   };
 
-  // Pop state stack (Touche Rond ◯ / Échap / Backspace)
-  // Quitte le lecteur pour revenir à la liste XMB SANS COUPER LE SON en arrière-plan
-  const popState = () => {
-    sound.playBack();
-    const current = stateRef.current;
-
-    // Sortie propre et immédiate de l'écran de jeu
-    if (current.viewMode === 'game_screen') {
-      handleExitGame();
-      return;
-    }
+  // Touche Rond ◯ / Échap / Backspace : Retour arrière déterministe
+  // Machine à états prédictible qui quitte le lecteur pour revenir à la sous-liste SANS COUPER LE SON en arrière-plan
+  const handleBack = () => {
+    try { sound.playBack(); } catch (e) {}
 
     // Si le volet latéral d'options est ouvert, le fermer en priorité
-    if (current.isOptionsOpen) {
+    if (isOptionsOpen || stateRef.current.isOptionsOpen) {
       setIsOptionsOpen(false);
+      stateRef.current.isOptionsOpen = false;
       return;
     }
 
-    if (current.isSearchModalOpen) {
+    if (isSearchModalOpen || stateRef.current.isSearchModalOpen) {
       setIsSearchModalOpen(false);
+      stateRef.current.isSearchModalOpen = false;
       return;
     }
 
@@ -532,35 +527,32 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       return;
     }
 
-    // Si on quitte le lecteur vidéo, on stoppe la vidéo
-    if (current.viewMode === 'video_player') {
+    const currentMode = stateRef.current.viewMode || viewMode;
+
+    // Navigation déterministe
+    if (currentMode === 'player') {
+      // Quitte le lecteur plein écran et revient à la sous-liste
+      setViewMode('sublist');
+      stateRef.current.viewMode = 'sublist';
+    } else if (currentMode === 'video_player') {
       if (videoRef.current) {
         videoRef.current.pause();
       }
       setIsVideoPlaying(false);
-    }
-
-    // Remonter d'un cran dans l'arborescence (sans couper la musique en arrière-plan)
-    if (current.navStack.length > 0) {
-      const last = current.navStack[current.navStack.length - 1];
-      setNavStack((prev) => prev.slice(0, -1));
-      setViewMode(last.view);
-      setCatIndex(last.catIndex);
-      setItemIndex(last.itemIndex);
-      setSubItemIndex(last.subItemIndex);
-      if (last.subListType) setSubListType(last.subListType);
-      stateRef.current.viewMode = last.view;
-      stateRef.current.catIndex = last.catIndex;
-      stateRef.current.itemIndex = last.itemIndex;
-      stateRef.current.subItemIndex = last.subItemIndex;
-      if (last.subListType) stateRef.current.subListType = last.subListType;
-    } else if (current.viewMode !== 'menu') {
+      setViewMode('sublist');
+      stateRef.current.viewMode = 'sublist';
+    } else if (currentMode === 'sublist') {
+      // Quitte la sous-liste et revient au menu racine sur la catégorie courante
       setViewMode('menu');
-      setItemIndex(0);
       stateRef.current.viewMode = 'menu';
-      stateRef.current.itemIndex = 0;
+      setSubItemIndex(0);
+      stateRef.current.subItemIndex = 0;
+    } else if (currentMode === 'game_screen') {
+      handleExitGame();
     }
   };
+
+  const popState = handleBack;
 
   // Home Button (Reset stack to root XMB, stop any playing video or game)
   const handleHome = () => {
@@ -984,12 +976,13 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     }
 
     if (!externalCommand) return;
-    if (externalCommand.timestamp <= lastProcessedCommandTimestampRef.current) {
+    const { action } = externalCommand;
+
+    // Déverrouillage immédiat pour la commande 'circle' (sans blocage de timestamp)
+    if (action !== 'circle' && externalCommand.timestamp <= lastProcessedCommandTimestampRef.current) {
       return;
     }
     lastProcessedCommandTimestampRef.current = externalCommand.timestamp;
-
-    const { action } = externalCommand;
 
     if (action === 'up' || action === 'down' || action === 'left' || action === 'right') {
       handleNav(action);
@@ -1000,7 +993,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     } else if (action === 'cross') {
       handleValidate();
     } else if (action === 'circle') {
-      popState();
+      handleBack();
     } else if (action === 'triangle') {
       handleOptions();
     } else if (action === 'square') {

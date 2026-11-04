@@ -244,14 +244,15 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Synchronisation dynamique du volume sur les deux instances et Master Gain
   useEffect(() => {
-    volumeRef.current = volume;
+    const safeVolume = Math.max(0, Math.min(1, isNaN(volume) ? 0.85 : volume));
+    volumeRef.current = safeVolume;
     if (gainNodeRef.current && audioCtxRef.current) {
-      gainNodeRef.current.gain.setValueAtTime(volume, audioCtxRef.current.currentTime);
+      gainNodeRef.current.gain.setValueAtTime(safeVolume, audioCtxRef.current.currentTime);
     }
     if (!isFadingRef.current) {
-      if (directAudioRef.current) directAudioRef.current.volume = volume;
+      if (directAudioRef.current) directAudioRef.current.volume = safeVolume;
       if (localAudioRef.current) {
-        localAudioRef.current.volume = volume;
+        localAudioRef.current.volume = safeVolume;
         localAudioRef.current.muted = false;
       }
     }
@@ -334,8 +335,9 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           const analyser = ctx.createAnalyser();
           analyser.fftSize = 512;
           analyser.smoothingTimeConstant = 0.75;
+          const safeVol = Math.max(0, Math.min(1, isNaN(volumeRef.current) ? 0.85 : volumeRef.current));
           const gain = ctx.createGain();
-          gain.gain.setValueAtTime(volumeRef.current, ctx.currentTime);
+          gain.gain.setValueAtTime(safeVol, ctx.currentTime);
           audioCtxRef.current = ctx;
           analyserRef.current = analyser;
           gainNodeRef.current = gain;
@@ -346,13 +348,14 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           analyserRef.current.smoothingTimeConstant = 0.75;
         }
         if (!gainNodeRef.current && audioCtxRef.current) {
+          const safeVol = Math.max(0, Math.min(1, isNaN(volumeRef.current) ? 0.85 : volumeRef.current));
           const gain = audioCtxRef.current.createGain();
-          gain.gain.setValueAtTime(volumeRef.current, audioCtxRef.current.currentTime);
+          gain.gain.setValueAtTime(safeVol, audioCtxRef.current.currentTime);
           gainNodeRef.current = gain;
         }
       }
 
-      // Réveil asynchrone de l'AudioContext sur Safari (WebKit)
+      // Réveil impératif et systématique de l'AudioContext si suspendu
       if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
         try {
           await audioCtxRef.current.resume();
@@ -394,18 +397,22 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
 
       // Éradication des blocages de volume / fondu : forcer immédiatement le gain et le volume réel
+      const safeVolume = Math.max(0, Math.min(1, isNaN(volumeRef.current) ? 0.85 : volumeRef.current));
       if (gainNodeRef.current && audioCtxRef.current) {
-        gainNodeRef.current.gain.setValueAtTime(volumeRef.current, audioCtxRef.current.currentTime);
+        gainNodeRef.current.gain.setValueAtTime(safeVolume, audioCtxRef.current.currentTime);
       }
 
       if (localAudioRef.current) {
-        localAudioRef.current.volume = volumeRef.current;
+        localAudioRef.current.volume = safeVolume;
         localAudioRef.current.muted = false;
         localAudioRef.current.src = finalAudioSrc;
         localAudioRef.current.currentTime = 0;
         setDuration(track.durationMs ? track.durationMs / 1000 : 30);
 
         try {
+          if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+            await audioCtxRef.current.resume();
+          }
           await localAudioRef.current.play();
           if (seq !== playSeqRef.current) return;
           setIsPlaying(true);
@@ -534,10 +541,11 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (isPlaying) {
       pauseTrack();
     } else {
-      audio.volume = volumeRef.current;
+      const safeVolume = Math.max(0, Math.min(1, isNaN(volumeRef.current) ? 0.85 : volumeRef.current));
+      audio.volume = safeVolume;
       audio.muted = false;
       if (gainNodeRef.current && audioCtxRef.current) {
-        gainNodeRef.current.gain.setValueAtTime(volumeRef.current, audioCtxRef.current.currentTime);
+        gainNodeRef.current.gain.setValueAtTime(safeVolume, audioCtxRef.current.currentTime);
       }
       audio.play().then(() => {
         setIsPlaying(true);
@@ -560,7 +568,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const setVolume = (val: number, showOSD: boolean = true) => {
-    const clamped = Math.max(0, Math.min(1, Math.round(val * 100) / 100));
+    const clamped = Math.max(0, Math.min(1, isNaN(val) ? 0.85 : Math.round(val * 100) / 100));
     volumeRef.current = clamped;
     setVolumeState(clamped);
     if (gainNodeRef.current && audioCtxRef.current) {
@@ -583,8 +591,11 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const adjustVolume = (delta: number) => {
     setVolumeState((prev) => {
-      const next = Math.max(0, Math.min(1, Math.round((prev + delta) * 100) / 100));
+      const next = Math.max(0, Math.min(1, isNaN(prev) ? 0.85 : Math.round((prev + delta) * 100) / 100));
       volumeRef.current = next;
+      if (gainNodeRef.current && audioCtxRef.current) {
+        gainNodeRef.current.gain.setValueAtTime(next, audioCtxRef.current.currentTime);
+      }
       if (!isFadingRef.current) {
         if (directAudioRef.current) directAudioRef.current.volume = next;
         if (localAudioRef.current) localAudioRef.current.volume = next;
