@@ -52,6 +52,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     duration,
     volume,
     analyser,
+    isRealDSP,
     playTrack,
     pauseTrack,
     togglePlay,
@@ -1090,7 +1091,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
             {/* À droite : Le grand visualiseur audio qui prend la même hauteur que la pochette (h-28) */}
             <div className="flex-1 h-28 bg-black/50 backdrop-blur-sm rounded-lg p-1.5 border border-white/15 shadow-inner overflow-hidden flex items-center justify-center">
-              <AudioVisualizer isPlaying={isPlaying} mode={visualizerMode} analyser={analyser} />
+              <AudioVisualizer isPlaying={isPlaying} mode={visualizerMode} analyser={analyser} isRealDSP={isRealDSP} />
             </div>
           </div>
 

@@ -11,6 +11,7 @@ interface AudioContextType {
   showVolumeOSD: boolean;
   audioError: string | null;
   analyser: AnalyserNode | null;
+  isRealDSP: boolean;
   playTrack: (track: Track) => void;
   pauseTrack: () => void;
   togglePlay: () => void;
@@ -54,6 +55,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [volume, setVolumeState] = useState<number>(0.85);
   const [showVolumeOSD, setShowVolumeOSD] = useState<boolean>(false);
   const [activeAnalyser, setActiveAnalyser] = useState<AnalyserNode | null>(null);
+  const [isRealDSP, setIsRealDSP] = useState<boolean>(false);
   const osdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Initialisation des éléments audio et des écouteurs d'événements
@@ -189,11 +191,14 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (AudioCtxClass) {
           const ctx = new AudioCtxClass();
           const analyser = ctx.createAnalyser();
-          analyser.fftSize = 128;
-          analyser.smoothingTimeConstant = 0.8;
+          analyser.fftSize = 512;
+          analyser.smoothingTimeConstant = 0.75;
           audioCtxRef.current = ctx;
           analyserRef.current = analyser;
         }
+      } else if (analyserRef.current) {
+        analyserRef.current.fftSize = 512;
+        analyserRef.current.smoothingTimeConstant = 0.75;
       }
 
       // Réveil asynchrone de l'AudioContext sur Safari (WebKit)
@@ -213,12 +218,15 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           analyserRef.current.connect(audioCtxRef.current.destination);
           sourceNodeRef.current = source;
           setActiveAnalyser(analyserRef.current);
+          setIsRealDSP(true);
         } catch (e) {
           console.warn('[AudioEngine] Échec connexion graphe Web Audio, repli matériel direct :', e);
           setActiveAnalyser(null);
+          setIsRealDSP(false);
         }
       } else if (analyserRef.current) {
         setActiveAnalyser(analyserRef.current);
+        setIsRealDSP(true);
       }
 
       if (localAudioRef.current) {
@@ -243,6 +251,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
       activeTypeRef.current = 'direct';
       setActiveAnalyser(null);
+      setIsRealDSP(false);
 
       if (directAudioRef.current) {
         directAudioRef.current.src = finalAudioSrc;
@@ -333,6 +342,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         showVolumeOSD,
         audioError,
         analyser: activeAnalyser,
+        isRealDSP,
         playTrack,
         pauseTrack,
         togglePlay,
