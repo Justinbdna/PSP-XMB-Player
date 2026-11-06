@@ -2010,7 +2010,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       {isGameBooting && (
         <video
           ref={gameBootVideoRef}
-          src="/media/startgame_v2.mp4"
+          src="/media/startgame.mp4"
           autoPlay
           playsInline
           onEnded={handleGameBootEnded}
