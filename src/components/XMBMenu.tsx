@@ -1095,27 +1095,12 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       {/* 1. TOP STATUS BAR (Masquée en mode vidéo pour supprimer tout conflit d'affichage) */}
       {viewMode !== 'video_player' && (
         <div className="absolute top-2 left-3 right-3 flex justify-between items-center z-30 text-[10px] font-medium tracking-wider text-white/80 drop-shadow">
-          <div className="flex items-center gap-1.5 text-white/60 text-[9px] uppercase font-mono">
-            {viewMode === 'game_screen' ? (
-              <span>PSP™ UMD</span>
-            ) : viewMode === 'player' ? (
-              <span className="text-emerald-400 font-bold flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                LECTEUR AUDIO
-              </span>
-            ) : viewMode === 'sublist' ? (
-              <span>PSP™ / {activeCategory.name}</span>
-            ) : (
-              <span>PSP™ XMB</span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 sm:gap-2.5">
-            {/* Témoin de lecture / Marquee du morceau en cours (Chantier 3) */}
-            {currentTrack && viewMode !== 'player' && (
+          <div className="flex items-center gap-1.5 text-white/60 text-[9px] uppercase font-mono min-w-0">
+            {/* Lecteur de musique positionné en haut à gauche à la place de PSP™ XMB */}
+            {currentTrack && viewMode !== 'player' && viewMode !== 'game_screen' ? (
               <div
                 onClick={() => pushState('player')}
-                className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/15 cursor-pointer hover:bg-white/20 transition-all max-w-[160px] sm:max-w-[200px] overflow-hidden flex-shrink-0"
+                className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/15 cursor-pointer hover:bg-white/20 transition-all max-w-[170px] sm:max-w-[210px] overflow-hidden flex-shrink-0 shadow-sm"
                 title={`${currentTrack.title} — ${currentTrack.artist} (Ouvrir le lecteur)`}
               >
                 <span
@@ -1142,7 +1127,21 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                   )}
                 </div>
               </div>
+            ) : viewMode === 'game_screen' ? (
+              <span>PSP™ UMD</span>
+            ) : viewMode === 'player' ? (
+              <span className="text-emerald-400 font-bold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                LECTEUR AUDIO
+              </span>
+            ) : viewMode === 'sublist' ? (
+              <span>PSP™ / {activeCategory.name}</span>
+            ) : (
+              <span>PSP™ XMB</span>
             )}
+          </div>
+
+          <div className="flex items-center gap-2 sm:gap-2.5 flex-shrink-0">
             <span className="font-mono text-white/90 flex-shrink-0">{dateStr}</span>
             <span className="font-mono font-bold text-white flex-shrink-0">{timeStr}</span>
 

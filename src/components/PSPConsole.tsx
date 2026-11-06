@@ -60,6 +60,7 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
 
   // Machine à états d'alimentation : 'off' (veille) -> 'booting' (coldboot) -> 'on' (XMB)
   const [powerState, setPowerState] = useState<'off' | 'booting' | 'on'>('off');
+  const [isBootFading, setIsBootFading] = useState<boolean>(false);
   const coldBootVideoRef = useRef<HTMLVideoElement | null>(null);
 
   const handlePowerOn = useCallback(() => {
@@ -69,8 +70,21 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
     });
   }, []);
 
+  // Fin de vidéo : mini fondu de sortie fluide d'une seconde
+  const handleBootEnded = useCallback(() => {
+    setIsBootFading(true);
+    setTimeout(() => {
+      setPowerState('on');
+      setIsBootFading(false);
+    }, 1000);
+  }, []);
+
   const skipBoot = useCallback(() => {
-    setPowerState((prev) => (prev === 'booting' ? 'on' : prev));
+    setIsBootFading(true);
+    setTimeout(() => {
+      setPowerState('on');
+      setIsBootFading(false);
+    }, 300);
   }, []);
 
   useEffect(() => {
@@ -160,7 +174,7 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
       }
       return;
     }
-    if (powerState === 'booting') {
+    if (powerState === 'booting' && !isBootFading) {
       if (action === 'cross' || action === 'start' || action === 'home') {
         skipBoot();
       }
@@ -168,7 +182,7 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
     }
     (document.activeElement as HTMLElement)?.blur();
     setExternalCommand({ action, timestamp: Date.now() });
-  }, [powerState, handlePowerOn, skipBoot]);
+  }, [powerState, isBootFading, handlePowerOn, skipBoot]);
 
   // Standard Gamepad Controller Integration via navigator.getGamepads()
   useGamepad({
@@ -338,7 +352,7 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
             boxShadow: 'inset 0 0 20px rgba(0,0,0,0.95)',
           }}
         >
-          {powerState === 'on' ? (
+          {powerState !== 'off' ? (
             <>
               {/* Fond dynamique sinusoïdal PSP en Canvas 2D */}
               <WaveBackground theme={theme} />
@@ -378,20 +392,27 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
 
               {/* Reflet subtil de vitre LCD */}
               <div className="absolute inset-0 pointer-events-none bg-gradient-to-tr from-transparent via-white/[0.02] to-white/[0.06]"></div>
+
+              {/* Superposition vidéo de démarrage avec mini fondu de sortie fluide d'une seconde */}
+              {powerState === 'booting' && (
+                <div
+                  className={`absolute inset-0 z-30 bg-black flex items-center justify-center transition-opacity duration-1000 ${
+                    isBootFading ? 'opacity-0 pointer-events-none' : 'opacity-100'
+                  }`}
+                >
+                  <video
+                    ref={coldBootVideoRef}
+                    src="/media/startup.mp4"
+                    playsInline
+                    autoPlay
+                    onEnded={handleBootEnded}
+                    onError={handleBootEnded}
+                    onClick={skipBoot}
+                    className="w-full h-full object-cover select-none cursor-pointer"
+                  />
+                </div>
+              )}
             </>
-          ) : powerState === 'booting' ? (
-            <div className="relative w-full h-full bg-black flex items-center justify-center">
-              <video
-                ref={coldBootVideoRef}
-                src="/media/startup.mp4"
-                playsInline
-                autoPlay
-                onEnded={() => setPowerState('on')}
-                onError={() => setPowerState('on')}
-                onClick={skipBoot}
-                className="w-full h-full object-cover select-none cursor-pointer"
-              />
-            </div>
           ) : (
             <div
               className="w-full h-full bg-black cursor-pointer flex flex-col items-center justify-center"
@@ -536,9 +557,9 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
               opacity: debugHitboxes ? 1 : powerState === 'off' ? 1 : 0,
             }}
           >
-            {/* Halo circulaire blanc translucide discret sur le bouton PlayStation */}
+            {/* Halo lumineux blanc translucide diffus sans bordure rigide sur le bouton PlayStation */}
             {powerState === 'off' && (
-              <span className="absolute inset-0 m-auto w-10 h-10 rounded-full bg-white/15 ring-2 ring-white/40 shadow-[0_0_25px_rgba(255,255,255,0.6)] animate-pulse pointer-events-none z-30" />
+              <span className="absolute inset-0 m-auto w-10 h-10 rounded-full bg-transparent shadow-[0_0_22px_8px_rgba(255,255,255,0.45)] animate-pulse pointer-events-none z-30" />
             )}
           </button>
 
