@@ -383,7 +383,7 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
             <div className="relative w-full h-full bg-black flex items-center justify-center">
               <video
                 ref={coldBootVideoRef}
-                src="/media/coldboot.mp4"
+                src="/media/startup.mp4"
                 playsInline
                 autoPlay
                 onEnded={() => setPowerState('on')}
