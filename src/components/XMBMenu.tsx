@@ -2006,11 +2006,11 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         </div>
       )}
 
-      {/* 10. GAME BOOT UMD (Lancement du jeu - Étape 3) */}
+      {/* 10. GAME BOOT UMD (Lancement du jeu) */}
       {isGameBooting && (
         <video
           ref={gameBootVideoRef}
-          src="/media/gameboot.mp4"
+          src="/media/startgame_v2.mp4"
           autoPlay
           playsInline
           onEnded={handleGameBootEnded}
