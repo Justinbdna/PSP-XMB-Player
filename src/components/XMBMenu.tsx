@@ -1095,53 +1095,37 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       {/* 1. TOP STATUS BAR (Masquée en mode vidéo pour supprimer tout conflit d'affichage) */}
       {viewMode !== 'video_player' && (
         <div className="absolute top-2 left-3 right-3 flex justify-between items-center z-30 text-[10px] font-medium tracking-wider text-white/80 drop-shadow">
-          <div className="flex items-center gap-1.5 text-white/60 text-[9px] uppercase font-mono min-w-0">
-            {/* Lecteur de musique positionné en haut à gauche à la place de PSP™ XMB */}
-            {currentTrack && viewMode !== 'player' && viewMode !== 'game_screen' ? (
+          {/* Section gauche épurée (suppression totale des indicateurs textuels pour alléger l'UI) */}
+          <div className="min-w-0" />
+
+          <div className="flex items-center gap-2 sm:gap-2.5 flex-shrink-0">
+            {/* Mini lecteur de musique fin et compact positionné à côté de l'heure et de la date */}
+            {currentTrack && viewMode !== 'player' && viewMode !== 'game_screen' && (
               <div
                 onClick={() => pushState('player')}
-                className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/15 cursor-pointer hover:bg-white/20 transition-all max-w-[170px] sm:max-w-[210px] overflow-hidden flex-shrink-0 shadow-sm"
+                className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/15 cursor-pointer hover:bg-white/20 transition-all max-w-[110px] sm:max-w-[125px] overflow-hidden flex-shrink-0 shadow-sm"
                 title={`${currentTrack.title} — ${currentTrack.artist} (Ouvrir le lecteur)`}
               >
                 <span
-                  className={`text-[8.5px] font-bold flex-shrink-0 ${
+                  className={`text-[8px] font-bold flex-shrink-0 ${
                     isPlaying ? 'text-emerald-400 animate-pulse' : 'text-white/60'
                   }`}
                 >
                   {isPlaying ? '▶' : '❚❚'}
                 </span>
                 <div className="overflow-hidden whitespace-nowrap flex-1 min-w-0">
-                  {currentTrack.title.length + currentTrack.artist.length > 18 ? (
-                    <div className="inline-flex animate-marquee">
-                      <span className="text-[9px] text-white/90 font-mono pr-6">
-                        {currentTrack.title} — {currentTrack.artist}
-                      </span>
-                      <span className="text-[9px] text-white/90 font-mono pr-6">
-                        {currentTrack.title} — {currentTrack.artist}
-                      </span>
-                    </div>
-                  ) : (
-                    <span className="text-[9px] text-white/90 font-mono truncate">
+                  <div className="inline-flex animate-marquee">
+                    <span className="text-[8.5px] text-white/90 font-mono pr-4">
                       {currentTrack.title} — {currentTrack.artist}
                     </span>
-                  )}
+                    <span className="text-[8.5px] text-white/90 font-mono pr-4">
+                      {currentTrack.title} — {currentTrack.artist}
+                    </span>
+                  </div>
                 </div>
               </div>
-            ) : viewMode === 'game_screen' ? (
-              <span>PSP™ UMD</span>
-            ) : viewMode === 'player' ? (
-              <span className="text-emerald-400 font-bold flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                LECTEUR AUDIO
-              </span>
-            ) : viewMode === 'sublist' ? (
-              <span>PSP™ / {activeCategory.name}</span>
-            ) : (
-              <span>PSP™ XMB</span>
             )}
-          </div>
 
-          <div className="flex items-center gap-2 sm:gap-2.5 flex-shrink-0">
             <span className="font-mono text-white/90 flex-shrink-0">{dateStr}</span>
             <span className="font-mono font-bold text-white flex-shrink-0">{timeStr}</span>
 

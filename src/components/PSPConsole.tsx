@@ -540,7 +540,7 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
           />
 
           {/* ----- 4. BARRE INFÉRIEURE : BOUTONS TACTILES PSP STREET (+20% surface cliquable) ----- */}
-          {/* Touche PS / Home : left 25.2%, top 92%, width 5%, height 6% */}
+          {/* Touche PS / Home : centrage chirurgical sur le logo PS (left 24.8%, top 92.6%) */}
           <button
             onClick={() => {
               if (powerState === 'off') {
@@ -553,13 +553,13 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
             aria-label="Touche PS / Accueil (Allumage en veille)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75 flex items-center justify-center overflow-visible z-30"
             style={{
-              ...getHitboxStyle({ top: '92%', left: '25.2%', width: '5%', height: '6%', borderRadius: '4px' }),
+              ...getHitboxStyle({ top: '92.6%', left: '24.8%', width: '4.8%', height: '5.5%', borderRadius: '4px' }),
               opacity: debugHitboxes ? 1 : powerState === 'off' ? 1 : 0,
             }}
           >
-            {/* Halo lumineux blanc translucide diffus sans bordure rigide sur le bouton PlayStation */}
+            {/* Halo lumineux blanc translucide diffus et pulsant, parfaitement centré sur le logo PlayStation */}
             {powerState === 'off' && (
-              <span className="absolute inset-0 m-auto w-10 h-10 rounded-full bg-transparent shadow-[0_0_22px_8px_rgba(255,255,255,0.45)] animate-pulse pointer-events-none z-30" />
+              <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/[0.03] shadow-[0_0_16px_4px_rgba(255,255,255,0.22)] animate-pulse pointer-events-none z-30" />
             )}
           </button>
 
