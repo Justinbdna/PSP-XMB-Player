@@ -1367,9 +1367,31 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                 style={{ left: `${Math.min(100, Math.max(0, (smoothTime / (duration || 30)) * 100))}%` }}
               />
             </div>
-            {/* Barre de commandes officielle unique et discrète */}
-            <div className="text-[8px] font-mono text-white/60 text-center mt-1 tracking-wider">
-              [L/R] Piste Préc./Suiv. • ✕ Pause • ◯ Retour • SELECT Visualiseur
+            {/* Barre de commandes enrichie avec boutons et glyphes PlayStation officiels */}
+            <div className="flex items-center justify-center gap-2.5 sm:gap-3.5 text-[8px] sm:text-[8.5px] text-white/70 font-medium mt-1 select-none pointer-events-none">
+              <span className="flex items-center gap-1">
+                <span className="inline-flex gap-0.5">
+                  <span className="px-1 py-0.5 rounded bg-white/15 border border-white/25 text-[7px] font-mono font-bold text-white/90 leading-none">L</span>
+                  <span className="px-1 py-0.5 rounded bg-white/15 border border-white/25 text-[7px] font-mono font-bold text-white/90 leading-none">R</span>
+                </span>
+                <span>Préc. / Suiv.</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <PSGlyph type="cross" size={11} />
+                <span>{isPlaying ? 'Pause' : 'Lecture'}</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <PSGlyph type="circle" size={11} />
+                <span>Retour</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="px-1 py-0.5 rounded bg-white/15 border border-white/25 text-[7px] font-mono font-bold text-white/90 leading-none">SELECT</span>
+                <span>Visualiseur</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <PSGlyph type="triangle" size={11} />
+                <span>Options</span>
+              </span>
             </div>
           </div>
         </div>

@@ -557,9 +557,9 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
               opacity: debugHitboxes ? 1 : powerState === 'off' ? 1 : 0,
             }}
           >
-            {/* Halo lumineux blanc translucide diffus et pulsant, parfaitement centré sur le logo PlayStation */}
+            {/* Halo lumineux blanc brillant et éclatant, centre transparent pour laisser le logo visible, pulsation douce */}
             {powerState === 'off' && (
-              <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/[0.03] shadow-[0_0_16px_4px_rgba(255,255,255,0.22)] animate-pulse pointer-events-none z-30" />
+              <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-transparent border border-white/60 shadow-[0_0_16px_5px_rgba(255,255,255,0.9),0_0_32px_10px_rgba(255,255,255,0.45)] animate-pulse pointer-events-none z-30" />
             )}
           </button>
 
@@ -620,9 +620,23 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
             </p>
           </button>
         ) : powerState === 'booting' ? (
-          <div className="px-6 py-2 rounded-full bg-black/60 border border-white/10 backdrop-blur-md">
-            <p className="text-xs font-mono text-white/60 animate-pulse">
-              Démarrage du système Sony Computer Entertainment...
+          <div className="px-6 py-2 rounded-full bg-black/60 border border-white/10 backdrop-blur-md shadow-lg">
+            <p className="text-xs font-mono text-white/80 flex items-center gap-1.5 tracking-wide">
+              <span>Démarrage de la PSP</span>
+              <span className="inline-flex gap-1 items-center ml-0.5">
+                <span
+                  className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"
+                  style={{ animationDuration: '1s', animationDelay: '0ms' }}
+                />
+                <span
+                  className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"
+                  style={{ animationDuration: '1s', animationDelay: '250ms' }}
+                />
+                <span
+                  className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"
+                  style={{ animationDuration: '1s', animationDelay: '500ms' }}
+                />
+              </span>
             </p>
           </div>
         ) : (

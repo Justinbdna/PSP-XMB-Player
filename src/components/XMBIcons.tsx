@@ -102,14 +102,14 @@ export const PSGlyph: React.FC<{ type: 'cross' | 'circle' | 'triangle' | 'square
       return (
         <svg width={size} height={size} viewBox="0 0 20 20" fill="none">
           <circle cx="10" cy="10" r="9" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
-          <polygon points="10,5.5 14.5,14 5.5,14" stroke="#4ecdc4" strokeWidth="2" strokeLinejoin="round" fill="none" />
+          <polygon points="10,5.5 14.5,14 5.5,14" stroke="#34d399" strokeWidth="2" strokeLinejoin="round" fill="none" />
         </svg>
       );
     case 'square':
       return (
         <svg width={size} height={size} viewBox="0 0 20 20" fill="none">
           <circle cx="10" cy="10" r="9" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
-          <rect x="6" y="6" width="8" height="8" stroke="#f48498" strokeWidth="2" fill="none" />
+          <rect x="6" y="6" width="8" height="8" stroke="#fb923c" strokeWidth="2" fill="none" />
         </svg>
       );
   }
