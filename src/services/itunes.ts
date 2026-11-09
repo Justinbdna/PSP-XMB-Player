@@ -39,7 +39,7 @@ export async function searchTracks(query: string): Promise<Track[]> {
         artist: item.artistName,
         album: item.collectionName || 'Single',
         previewUrl: item.previewUrl,
-        artworkUrl: (item.artworkUrl100 || '').replace('100x100bb.jpg', '600x600bb.jpg'),
+        artworkUrl: (item.artworkUrl100 || '').replace('100x100bb.jpg', '160x160bb.jpg'),
         durationMs: item.trackTimeMillis || 90000,
         sourceType: 'itunes' as const,
       }));

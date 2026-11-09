@@ -640,9 +640,9 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
             </p>
           </div>
         ) : (
-          <div className="px-5 py-1.5 rounded-full bg-black/40 border border-white/5 backdrop-blur-sm">
-            <p className="text-[11px] font-mono text-white/40 tracking-wider">
-              🎮 D-Pad • Ⓢ Home • VOL +/- • SELECT • START
+          <div className="mt-4 px-6 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-md shadow-md">
+            <p className="text-xs font-mono text-white/70 tracking-wider">
+              🎮 D-Pad / Flèches • Ⓢ Home • ✕ Valider • ◯ Retour • SELECT • START
             </p>
           </div>
         )}

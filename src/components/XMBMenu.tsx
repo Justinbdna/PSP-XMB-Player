@@ -113,6 +113,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     duration: 0,
   });
   const [showVideoHUD, setShowVideoHUD] = useState<boolean>(true);
+  const [videoError, setVideoError] = useState<string | null>(null);
   const [videoAspectMode, setVideoAspectMode] = useState<'contain' | 'cover'>('contain');
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const hudTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -281,6 +282,26 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       videoRef.current.volume = volume;
     }
   }, [volume]);
+
+  // Démarrage garanti du lecteur vidéo MP4 lors de l'accès au mode 'video_player'
+  useEffect(() => {
+    if (viewMode === 'video_player' && currentVideo && videoRef.current) {
+      setVideoError(null);
+      videoRef.current.volume = volume;
+      const playPromise = videoRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            setIsVideoPlaying(true);
+          })
+          .catch((err) => {
+            console.warn('[VideoPlayer] Autoplay restreint par le navigateur:', err);
+            setIsVideoPlaying(false);
+            setShowVideoHUD(true);
+          });
+      }
+    }
+  }, [viewMode, currentVideo, volume]);
 
   // Refresh listening history on view change
   useEffect(() => {
@@ -501,11 +522,13 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     ]);
     setViewMode(newView);
     if (nextSubListType) setSubListType(nextSubListType);
-    setSubItemIndex(0);
+    if (newView === 'sublist') {
+      setSubItemIndex(0);
+      stateRef.current.subItemIndex = 0;
+    }
     setIsOptionsOpen(false);
     stateRef.current.viewMode = newView;
     if (nextSubListType) stateRef.current.subListType = nextSubListType;
-    stateRef.current.subItemIndex = 0;
     stateRef.current.isOptionsOpen = false;
   };
 
@@ -559,8 +582,20 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     } else if (currentMode === 'video_player') {
       if (videoRef.current) {
         videoRef.current.pause();
+        videoRef.current.removeAttribute('src');
+        videoRef.current.load();
       }
       setIsVideoPlaying(false);
+      setVideoError(null);
+      setNavStack((prev) => {
+        const last = prev[prev.length - 1];
+        if (last && last.view === 'sublist') {
+          setSubItemIndex(last.subItemIndex);
+          stateRef.current.subItemIndex = last.subItemIndex;
+          return prev.slice(0, -1);
+        }
+        return prev;
+      });
       setViewMode('sublist');
       stateRef.current.viewMode = 'sublist';
     } else if (currentMode === 'sublist') {
@@ -581,7 +616,8 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     sound.playBack();
     if (videoRef.current) {
       videoRef.current.pause();
-      videoRef.current.currentTime = 0;
+      videoRef.current.removeAttribute('src');
+      videoRef.current.load();
     }
     setIsVideoPlaying(false);
     setNavStack([]);
@@ -757,7 +793,11 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
             : s.subListType === 'theme'
             ? s.officialThemesList.length
             : s.currentSubList.length;
-        setSubItemIndex((prev) => (prev > 0 ? prev - 1 : Math.max(0, listLength - 1)));
+        setSubItemIndex((prev) => {
+          const next = prev > 0 ? prev - 1 : Math.max(0, listLength - 1);
+          stateRef.current.subItemIndex = next;
+          return next;
+        });
       } else if (dir === 'down') {
         sound.playTick();
         const listLength =
@@ -768,7 +808,11 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
             : s.subListType === 'theme'
             ? s.officialThemesList.length
             : s.currentSubList.length;
-        setSubItemIndex((prev) => (prev < listLength - 1 ? prev + 1 : 0));
+        setSubItemIndex((prev) => {
+          const next = prev < listLength - 1 ? prev + 1 : 0;
+          stateRef.current.subItemIndex = next;
+          return next;
+        });
       } else if (dir === 'left') {
         popState();
       }
@@ -881,7 +925,10 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         if (selectedVideo) {
           pauseTrack();
           setCurrentVideo(selectedVideo);
+          stateRef.current.currentVideo = selectedVideo;
           setIsVideoPlaying(true);
+          stateRef.current.isVideoPlaying = true;
+          setVideoError(null);
           pushState('video_player', 'video');
         }
         return;
@@ -1212,6 +1259,13 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
             onEnded={() => {
               playNextVideo();
             }}
+            onError={(e) => {
+              const target = e.currentTarget as HTMLVideoElement;
+              console.error('[VideoPlayer] Erreur chargement vidéo:', currentVideo.url, target.error);
+              setVideoError(`Impossible de lire cette vidéo (${currentVideo.title}). Fichier introuvable ou format non supporté.`);
+              setIsVideoPlaying(false);
+              setShowVideoHUD(true);
+            }}
           />
 
           {/* Barre Supérieure (Top HUD) */}
@@ -1263,13 +1317,33 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
           </div>
 
           {/* Indicateur Central Play / Pause (uniquement en pause) */}
-          {!isVideoPlaying && (
+          {!isVideoPlaying && !videoError && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-25">
               <div className="w-14 h-14 rounded-full bg-black/60 border border-white/20 flex items-center justify-center text-white/90 shadow-2xl backdrop-blur-sm animate-fade-in">
                 <svg className="w-6 h-6 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M8 5v14l11-7z" />
                 </svg>
               </div>
+            </div>
+          )}
+
+          {/* Message d'erreur explicite avec bouton retour */}
+          {videoError && (
+            <div className="absolute inset-0 z-40 bg-black/90 flex flex-col items-center justify-center p-6 text-center animate-fade-in">
+              <div className="w-12 h-12 rounded-full bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400 mb-3 text-lg">
+                ⚠️
+              </div>
+              <p className="text-sm font-bold text-white mb-1">Lecture impossible</p>
+              <p className="text-xs text-white/60 max-w-xs mb-4 font-mono">{videoError}</p>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleBack();
+                }}
+                className="px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-xs font-mono text-white transition cursor-pointer"
+              >
+                ◯ Retour aux vidéos
+              </button>
             </div>
           )}
 
@@ -1331,8 +1405,9 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
               </div>
               {currentTrack.artworkUrl && currentTrack.artworkUrl.trim() !== '' && (
                 <img
-                  src={currentTrack.artworkUrl}
+                  src={currentTrack.artworkUrl.replace('160x160bb.jpg', '600x600bb.jpg').replace('100x100bb.jpg', '600x600bb.jpg')}
                   alt={currentTrack.title}
+                  decoding="async"
                   className={`relative z-10 w-full h-full object-cover transition-transform duration-700 ${
                     isPlaying ? 'scale-105' : 'scale-100'
                   }`}
@@ -1582,6 +1657,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                   // Games list from src/data/games.json
                   gamesList.map((game, idx) => {
                     const isSelected = idx === subItemIndex;
+                    const isNearVisible = Math.abs(idx - subItemIndex) <= 3;
                     return (
                       <div
                         key={game.id}
@@ -1604,7 +1680,11 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                         }`}
                       >
                         <div className="relative w-12 h-8 rounded overflow-hidden flex-shrink-0 shadow border border-white/20 bg-gradient-to-br from-[#132219] via-[#0d1712] to-black flex items-center justify-center">
-                          <CategoryIcon type="game" active={isSelected} />
+                          {isNearVisible ? (
+                            <CategoryIcon type="game" active={isSelected} />
+                          ) : (
+                            <span className="text-[7.5px] font-mono text-emerald-400/50">UMD</span>
+                          )}
                         </div>
                         <div className="flex flex-col min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
@@ -1637,6 +1717,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                   ) : (
                     videosList.map((video, idx) => {
                       const isSelected = idx === subItemIndex;
+                      const isNearVisible = Math.abs(idx - subItemIndex) <= 3;
                       return (
                         <div
                           key={video.id}
@@ -1652,22 +1733,26 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                               : 'opacity-45 hover:opacity-75'
                           }`}
                         >
-                          {/* Miniature visuelle dynamique (Image ou frame vidéo native #t=1) */}
+                          {/* Miniature visuelle optimisée avec culling progressif (Image ultra-légère ou badge PSP) */}
                           <div className="relative w-14 h-9 rounded overflow-hidden flex-shrink-0 shadow border border-white/20 bg-black/40 flex items-center justify-center">
-                            {video.thumbnail ? (
-                              <img
-                                src={video.thumbnail}
-                                alt={video.title}
-                                className="w-14 h-9 object-cover rounded"
-                              />
+                            {isNearVisible ? (
+                              video.thumbnail ? (
+                                <img
+                                  src={video.thumbnail}
+                                  alt={video.title}
+                                  loading="lazy"
+                                  decoding="async"
+                                  className="w-14 h-9 object-cover rounded"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900 border border-white/10 rounded">
+                                  <CategoryIcon type="video" active={isSelected} />
+                                </div>
+                              )
                             ) : (
-                              <video
-                                src={`${video.url}#t=1`}
-                                preload="metadata"
-                                muted
-                                playsInline
-                                className="w-14 h-9 object-cover rounded pointer-events-none bg-black/40 border border-white/10"
-                              />
+                              <div className="w-full h-full bg-zinc-900/40 flex items-center justify-center text-[7px] font-mono text-white/25">
+                                MP4
+                              </div>
                             )}
                             <div className="absolute inset-0 bg-black/20 flex items-center justify-center pointer-events-none">
                               <span className="text-[8px] text-white/90 drop-shadow">▶</span>
@@ -1708,6 +1793,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                   currentSubList.map((track, idx) => {
                     const isSelected = idx === subItemIndex;
                     const isCurrent = currentTrack?.id === track.id;
+                    const isNearVisible = Math.abs(idx - subItemIndex) <= 3;
                     return (
                       <div
                         key={track.id}
@@ -1723,17 +1809,28 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                             : 'opacity-45 hover:opacity-75'
                         }`}
                       >
-                        {track.artworkUrl && track.artworkUrl.trim() !== '' ? (
-                          <img
-                            src={track.artworkUrl}
-                            alt={track.title}
-                            className="w-8 h-8 rounded object-cover flex-shrink-0 shadow border border-white/20"
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none';
-                            }}
-                          />
+                        {isNearVisible ? (
+                          track.artworkUrl && track.artworkUrl.trim() !== '' ? (
+                            <img
+                              src={track.artworkUrl}
+                              alt={track.title}
+                              loading="lazy"
+                              decoding="async"
+                              className="w-8 h-8 rounded object-cover flex-shrink-0 shadow border border-white/20"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                              }}
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded bg-zinc-900 border border-white/20 flex items-center justify-center flex-shrink-0 text-white/40">
+                              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                <circle cx="12" cy="12" r="9" />
+                                <circle cx="12" cy="12" r="3" />
+                              </svg>
+                            </div>
+                          )
                         ) : (
-                          <div className="w-8 h-8 rounded bg-zinc-900 border border-white/20 flex items-center justify-center flex-shrink-0 text-white/40">
+                          <div className="w-8 h-8 rounded bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0 text-white/20">
                             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                               <circle cx="12" cy="12" r="9" />
                               <circle cx="12" cy="12" r="3" />
