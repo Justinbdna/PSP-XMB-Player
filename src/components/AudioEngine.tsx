@@ -155,12 +155,12 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     const directAudio = new Audio();
     directAudio.volume = volume;
-    directAudio.preload = 'auto';
+    directAudio.preload = 'metadata';
     directAudioRef.current = directAudio;
 
     const localAudio = new Audio();
     localAudio.volume = volume;
-    localAudio.preload = 'auto';
+    localAudio.preload = 'metadata';
     localAudioRef.current = localAudio;
 
     const attachListeners = (audio: HTMLAudioElement, type: 'direct' | 'local') => {
