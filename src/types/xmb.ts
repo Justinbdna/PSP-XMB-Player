@@ -44,7 +44,16 @@ export interface GameItem {
   description?: string;
   genre?: string;
   size?: string;
+  fileSizeBytes?: number;
   icon?: string;
+  thumbnail?: string;
+  engine?: 'builtin' | 'j2me';
+  romUrl?: string;
+  version?: string;
+  resolution?: {
+    width: number;
+    height: number;
+  };
 }
 
 export interface XMBItem {

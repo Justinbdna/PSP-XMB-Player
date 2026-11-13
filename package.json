@@ -4,11 +4,12 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "node scripts/sync-audio.mjs && node scripts/sync-videos.mjs && vite",
-    "build": "node scripts/sync-audio.mjs && node scripts/sync-videos.mjs && tsc -b && vite build",
+    "dev": "node scripts/sync-audio.mjs && node scripts/sync-videos.mjs && node scripts/sync-games.mjs && vite",
+    "build": "node scripts/sync-audio.mjs && node scripts/sync-videos.mjs && node scripts/sync-games.mjs && tsc -b && vite build",
     "preview": "vite preview",
     "sync:videos": "node scripts/sync-videos.mjs",
-    "sync:audio": "node scripts/sync-audio.mjs"
+    "sync:audio": "node scripts/sync-audio.mjs",
+    "sync:games": "node scripts/sync-games.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.475.0",

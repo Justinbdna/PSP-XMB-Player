@@ -38,7 +38,22 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
   externalCommand,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const { setVolume: setEngineVolume } = useAudio();
+  const {
+    currentTrack,
+    isPlaying,
+    playlist,
+    playTrack,
+    togglePlay,
+    setVolume: setEngineVolume,
+  } = useAudio();
+
+  const handleToggleBgmPlayback = useCallback(() => {
+    if (!currentTrack && playlist.length > 0) {
+      playTrack(playlist[0], playlist);
+    } else {
+      togglePlay();
+    }
+  }, [currentTrack, playlist, playTrack, togglePlay]);
 
   // 1. États de volume stricts (entiers 0 à 100) :
   const [selectedTrack, setSelectedTrack] = useState<number>(0); // 0: Général, 1: Musique, 2: Bruitages
@@ -109,6 +124,7 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
         break;
       case 'ENTER':
         try { sound.playEnter(); } catch (e) {}
+        handleToggleBgmPlayback();
         break;
       case 'CLOSE':
         try { sound.playBack(); } catch (e) {}
@@ -321,13 +337,13 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
       else if (e.key === 'ArrowDown' || e.key === 's') dispatchMixerAction('DOWN');
       else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'q') dispatchMixerAction('LEFT');
       else if (e.key === 'ArrowRight' || e.key === 'd') dispatchMixerAction('RIGHT');
-      else if (e.key === 'Enter') dispatchMixerAction('ENTER');
-      else if (e.key === 'Escape' || e.key === 'Tab') dispatchMixerAction('CLOSE');
+      else if (e.key === 'Enter' || e.code === 'Space') dispatchMixerAction('ENTER');
+      else if (e.key === 'Escape' || e.key === 'Tab' || e.key.toLowerCase() === 'm') dispatchMixerAction('CLOSE');
     };
 
     window.addEventListener('keydown', onKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
-  }, [isMixerOpen, selectedTrack, masterVol, bgmVol, sfxVol]);
+  }, [isMixerOpen, selectedTrack, masterVol, bgmVol, sfxVol, handleToggleBgmPlayback]);
 
   // Contrôles clavier en jeu (quand le mixeur est fermé)
   useEffect(() => {
@@ -336,7 +352,7 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
     const onKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
 
-      if (key === 'tab' || key === 'v' || key === 'p') {
+      if (key === 'tab' || key === 'v' || key === 'p' || key === 'm') {
         e.preventDefault();
         e.stopPropagation();
         try { sound.playOption(); } catch (err) {}
@@ -387,7 +403,7 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
     const cmd = rawCmd.toLowerCase();
 
     if (!isMixerOpen) {
-      if (cmd === 'select' || cmd === 'start') {
+      if (cmd === 'select' || cmd === 'start' || cmd === 'music_note') {
         try { sound.playOption(); } catch (e) {}
         setIsMixerOpen(true);
       } else if (cmd === 'vol_up') {
@@ -423,8 +439,8 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
     else if (cmd === 'down' || cmd === 'dpad_down') dispatchMixerAction('DOWN');
     else if (cmd === 'left' || cmd === 'dpad_left' || cmd === 'vol_down') dispatchMixerAction('LEFT');
     else if (cmd === 'right' || cmd === 'dpad_right' || cmd === 'vol_up') dispatchMixerAction('RIGHT');
-    else if (cmd === 'cross') dispatchMixerAction('ENTER');
-    else if (cmd === 'circle' || cmd === 'select' || cmd === 'start') dispatchMixerAction('CLOSE');
+    else if (cmd === 'cross' || cmd === 'square') dispatchMixerAction('ENTER');
+    else if (cmd === 'circle' || cmd === 'select' || cmd === 'start' || cmd === 'music_note') dispatchMixerAction('CLOSE');
     else if (cmd === 'home') onExit();
   }, [externalCommand, isMixerOpen, selectedTrack, masterVol, bgmVol, sfxVol]);
 
@@ -796,9 +812,16 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
             className="w-[370px] sm:w-[390px] py-3.5 px-5 bg-black/50 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl text-white select-none"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* En-tête sobre */}
-            <div className="mb-2.5">
+            {/* En-tête sobre avec bascule Lecture/Pause musique XMB */}
+            <div className="mb-2.5 flex items-center justify-between gap-2">
               <h3 className="text-sm font-medium tracking-wide text-white/90">Mixeur audio</h3>
+              <button
+                type="button"
+                onClick={handleToggleBgmPlayback}
+                className="px-2 py-0.5 rounded-md bg-white/10 hover:bg-white/20 border border-white/15 text-[10px] font-mono text-white/90 cursor-pointer transition-colors"
+              >
+                {isPlaying ? '❚❚ Pause musique' : '▶ Lire musique'}
+              </button>
             </div>
 
             {/* Pistes et curseurs épurés */}
