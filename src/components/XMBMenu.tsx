@@ -877,34 +877,85 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     }
   }, [triggerVideoHUD]);
 
-  // Gâchette L : Morceau / Vidéo précédent(e) ou Catégorie Gauche
-  const handleTriggerL = () => {
+  const getSubListLength = (s: typeof stateRef.current) =>
+    s.subListType === 'game'
+      ? s.gamesList.length
+      : s.subListType === 'video'
+      ? s.videosList.length
+      : s.subListType === 'theme'
+      ? s.officialThemesList.length
+      : s.subListType === 'skin'
+      ? s.availableSkins.length
+      : s.currentSubList.length;
+
+  // Gâchettes L / R : morceau/vidéo précédent(e) ou suivant(e), pagination rapide en sous-liste, ou changement de catégorie XMB
+  const handleTrigger = (dir: 'left' | 'right') => {
     const s = stateRef.current;
+    if (s.isGameBooting || s.isSearchModalOpen) return;
+
     if (s.viewMode === 'video_player') {
-      playPreviousVideo();
+      if (dir === 'left') playPreviousVideo();
+      else playNextVideo();
       return;
     }
+
     if (s.viewMode === 'player') {
       sound.playTick();
-      previousTrack();
+      if (dir === 'left') previousTrack();
+      else nextTrack();
       return;
     }
-    handleNav('left');
+
+    if (s.isOptionsOpen) return;
+
+    if (s.viewMode === 'sublist') {
+      const listLength = getSubListLength(s);
+      if (listLength === 0) return;
+      sound.playTick();
+      const step = dir === 'left' ? -5 : 5;
+      setSubItemIndex((prev) => {
+        const next = Math.max(0, Math.min(listLength - 1, prev + step));
+        stateRef.current.subItemIndex = next;
+        return next;
+      });
+      return;
+    }
+
+    handleNav(dir);
   };
 
-  // Gâchette R : Morceau / Vidéo suivant(e) ou Catégorie Droite
-  const handleTriggerR = () => {
+  const handleTriggerL = () => handleTrigger('left');
+  const handleTriggerR = () => handleTrigger('right');
+
+  // Touche START : contrôle contextuel (vidéo en cours, lecteur audio, pause de la lecture active, ou validation de l'élément)
+  const handleStart = () => {
     const s = stateRef.current;
+    if (s.isGameBooting || s.isSearchModalOpen) return;
+
     if (s.viewMode === 'video_player') {
-      playNextVideo();
+      handleSquare();
       return;
     }
+
     if (s.viewMode === 'player') {
       sound.playTick();
-      nextTrack();
+      s.togglePlay();
       return;
     }
-    handleNav('right');
+
+    if (s.isOptionsOpen) {
+      sound.playBack();
+      setIsOptionsOpen(false);
+      return;
+    }
+
+    if (s.currentTrack) {
+      sound.playTick();
+      s.togglePlay();
+      return;
+    }
+
+    handleValidate();
   };
 
   // Refactorisation stricte de la navigation directionnelle selon la logique Sony
@@ -972,20 +1023,9 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
     // 4. AU SEIN D'UN SOUS-DOSSIER (SUBLIST)
     if (s.viewMode === 'sublist') {
-      const getSubListLength = () =>
-        s.subListType === 'game'
-          ? s.gamesList.length
-          : s.subListType === 'video'
-          ? s.videosList.length
-          : s.subListType === 'theme'
-          ? s.officialThemesList.length
-          : s.subListType === 'skin'
-          ? s.availableSkins.length
-          : s.currentSubList.length;
-
       if (dir === 'up') {
         sound.playTick();
-        const listLength = getSubListLength();
+        const listLength = getSubListLength(s);
         setSubItemIndex((prev) => {
           const next = prev > 0 ? prev - 1 : Math.max(0, listLength - 1);
           stateRef.current.subItemIndex = next;
@@ -993,7 +1033,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         });
       } else if (dir === 'down') {
         sound.playTick();
-        const listLength = getSubListLength();
+        const listLength = getSubListLength(s);
         setSubItemIndex((prev) => {
           const next = prev < listLength - 1 ? prev + 1 : 0;
           stateRef.current.subItemIndex = next;
@@ -1269,13 +1309,14 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     } else if (action === 'select') {
       handleSelect();
     } else if (action === 'start') {
-      togglePlay();
+      handleStart();
     } else if (action === 'music_note') {
-      if (currentTrack) {
-        togglePlay();
+      const s = stateRef.current;
+      if (s.currentTrack) {
+        s.togglePlay();
       } else {
-        const fallbackList = localTracks.length > 0 ? localTracks : itunesTracks;
-        if (fallbackList.length > 0) playTrack(fallbackList[0], fallbackList);
+        const fallbackList = s.localTracks.length > 0 ? s.localTracks : s.itunesTracks;
+        if (fallbackList.length > 0) s.playTrack(fallbackList[0], fallbackList);
       }
     } else if (action === 'vol_up') {
       adjustVolume(0.05);
@@ -1721,8 +1762,6 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                   <span>Musique</span>
                 </span>
               )}
-              <PSPKeycap shape="pill">START</PSPKeycap>
-              <PSPKeycap shape="pill">HOME</PSPKeycap>
             </div>
           </div>
         </div>
@@ -2443,8 +2482,6 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
               <PSPKeycap shape="pill">SELECT</PSPKeycap>
               <span>Thème</span>
             </span>
-            <PSPKeycap shape="pill">START</PSPKeycap>
-            <PSPKeycap shape="pill">HOME</PSPKeycap>
           </div>
         </div>
       )}

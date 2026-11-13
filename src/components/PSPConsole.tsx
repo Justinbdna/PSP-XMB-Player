@@ -97,7 +97,7 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
   } | null>(null);
   const [xmbContext, setXmbContext] = useState<XMBContextInfo>('xmb_menu');
 
-  const { togglePlay, showVolumeOSD, volume } = useAudio();
+  const { showVolumeOSD, volume } = useAudio();
 
   // Machine à états d'alimentation : 'off' (veille) -> 'booting' (coldboot) -> 'on' (XMB)
   const [powerState, setPowerState] = useState<'off' | 'booting' | 'on'>('off');
@@ -311,7 +311,7 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
       sendCommand('select');
     },
     onStart: () => {
-      togglePlay();
+      sendCommand('start');
     },
     onHome: () => {
       if (powerState === 'off') {

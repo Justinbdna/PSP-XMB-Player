@@ -44,6 +44,8 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
     playlist,
     playTrack,
     togglePlay,
+    nextTrack,
+    previousTrack,
     setVolume: setEngineVolume,
   } = useAudio();
 
@@ -440,9 +442,15 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
     else if (cmd === 'left' || cmd === 'dpad_left' || cmd === 'vol_down') dispatchMixerAction('LEFT');
     else if (cmd === 'right' || cmd === 'dpad_right' || cmd === 'vol_up') dispatchMixerAction('RIGHT');
     else if (cmd === 'cross' || cmd === 'square') dispatchMixerAction('ENTER');
-    else if (cmd === 'circle' || cmd === 'select' || cmd === 'start' || cmd === 'music_note') dispatchMixerAction('CLOSE');
+    else if (cmd === 'trigger_l') {
+      try { sound.playCursor(); } catch (e) {}
+      previousTrack();
+    } else if (cmd === 'trigger_r') {
+      try { sound.playCursor(); } catch (e) {}
+      nextTrack();
+    } else if (cmd === 'circle' || cmd === 'select' || cmd === 'start' || cmd === 'music_note') dispatchMixerAction('CLOSE');
     else if (cmd === 'home') onExit();
-  }, [externalCommand, isMixerOpen, selectedTrack, masterVol, bgmVol, sfxVol]);
+  }, [externalCommand, isMixerOpen, selectedTrack, masterVol, bgmVol, sfxVol, nextTrack, previousTrack]);
 
   // Boucle de rendu Canvas 2D (480x272 pixels natifs PSP)
   useEffect(() => {
