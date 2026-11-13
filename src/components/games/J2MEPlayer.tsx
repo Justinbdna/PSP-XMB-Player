@@ -573,45 +573,45 @@ export const J2MEPlayer: React.FC<J2MEPlayerProps> = ({
         </div>
       )}
 
-      {/* Compact PSP Glassmorphism Audio Mixer Overlay */}
-      {visible && isMixerOpen && (
-        <div
-          className="absolute inset-0 z-40 bg-black/55 backdrop-blur-sm flex items-center justify-center p-3"
-          onClick={() => setIsMixerOpen(false)}
-        >
+      {/* Compact PSP Glassmorphism Audio Mixer Overlay (docked in right pillarbox for portrait games) */}
+      {visible && isMixerOpen && (() => {
+        const isPortraitPillarbox = width / height < 1.15;
+        const mixerCard = (
           <div
-            className="w-full max-w-[258px] bg-[#0e1117]/80 backdrop-blur-xl border border-white/20 rounded-xl p-2.5 text-white shadow-[0_14px_38px_rgba(0,0,0,0.85)]"
+            className={`${
+              isPortraitPillarbox ? 'w-[116px] p-2' : 'w-full max-w-[258px] p-2.5'
+            } bg-[#0e1117]/80 backdrop-blur-xl border border-white/20 rounded-xl text-white shadow-[0_12px_32px_rgba(0,0,0,0.8)]`}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-white/10">
-              <div className="flex items-center gap-1.5">
-                <Music className="w-3 h-3 text-white/80" />
-                <span className="text-[10.5px] font-semibold tracking-wide text-white/95">
-                  Mixeur Audio PSP
+            <div className={`flex items-center justify-between border-b border-white/10 ${isPortraitPillarbox ? 'pb-1 mb-1.5' : 'pb-1.5 mb-2'}`}>
+              <div className="flex items-center gap-1 min-w-0">
+                <Music className="w-2.5 h-2.5 text-white/80 shrink-0" />
+                <span className={`${isPortraitPillarbox ? 'text-[9px]' : 'text-[10.5px]'} font-semibold tracking-wide text-white/95 truncate`}>
+                  {isPortraitPillarbox ? 'Mixeur Audio' : 'Mixeur Audio PSP'}
                 </span>
               </div>
               <button
                 type="button"
                 onClick={() => setIsMixerOpen(false)}
-                className="p-0.5 rounded hover:bg-white/10 text-white/55 hover:text-white cursor-pointer transition-colors"
+                className="p-0.5 rounded hover:bg-white/10 text-white/55 hover:text-white cursor-pointer transition-colors shrink-0"
                 aria-label="Fermer le mixeur"
               >
-                <X className="w-3 h-3" />
+                <X className="w-2.5 h-2.5" />
               </button>
             </div>
 
             {/* XMB Music player controls */}
-            <div className="bg-white/[0.06] border border-white/10 rounded-lg px-2 py-1.5 mb-2">
-              <div className="flex items-center justify-between gap-2">
+            <div className={`bg-white/[0.06] border border-white/10 rounded-lg ${isPortraitPillarbox ? 'px-1.5 py-1 mb-1.5' : 'px-2 py-1.5 mb-2'}`}>
+              <div className={isPortraitPillarbox ? 'flex flex-col gap-1' : 'flex items-center justify-between gap-2'}>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[9.5px] font-medium truncate text-white/95">
+                  <p className={`${isPortraitPillarbox ? 'text-[8.5px]' : 'text-[9.5px]'} font-medium truncate text-white/95`}>
                     {currentTrack ? currentTrack.title : 'Aucune musique'}
                   </p>
-                  <p className="text-[8px] text-white/50 truncate">
-                    {currentTrack ? currentTrack.artist : 'Lecture pour lancer la playlist'}
+                  <p className="text-[7.5px] text-white/50 truncate">
+                    {currentTrack ? currentTrack.artist : 'Lancer la playlist'}
                   </p>
                 </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
+                <div className={`flex items-center ${isPortraitPillarbox ? 'justify-center gap-1.5' : 'gap-1'} flex-shrink-0`}>
                   <button
                     type="button"
                     onClick={previousTrack}
@@ -643,22 +643,22 @@ export const J2MEPlayer: React.FC<J2MEPlayerProps> = ({
             {/* Game volume slider */}
             <div
               onClick={() => setActiveMixerChannel(0)}
-              className={`mb-1.5 rounded-lg px-1.5 py-1 border transition-colors ${
+              className={`rounded-lg px-1.5 border transition-colors ${isPortraitPillarbox ? 'mb-1 py-0.5' : 'mb-1.5 py-1'} ${
                 activeMixerChannel === 0
                   ? 'bg-white/[0.06] border-white/15'
                   : 'border-transparent'
               }`}
             >
-              <div className="flex items-center justify-between text-[9.5px] mb-1">
+              <div className={`flex items-center justify-between ${isPortraitPillarbox ? 'text-[8px] mb-0.5' : 'text-[9.5px] mb-1'}`}>
                 <span className="flex items-center gap-1 text-white/85">
                   {gameVolume <= 0.01 ? (
                     <VolumeX className="w-2.5 h-2.5 text-white/50" />
                   ) : (
                     <Volume2 className="w-2.5 h-2.5 text-white/80" />
                   )}
-                  Son du jeu
+                  Jeu
                 </span>
-                <span className="font-mono text-white/75">{Math.round(gameVolume * 100)}%</span>
+                <span className="font-mono text-white/75 tabular-nums">{Math.round(gameVolume * 100)}%</span>
               </div>
               <input
                 type="range"
@@ -677,18 +677,18 @@ export const J2MEPlayer: React.FC<J2MEPlayerProps> = ({
             {/* XMB Music volume slider */}
             <div
               onClick={() => setActiveMixerChannel(1)}
-              className={`mb-2 rounded-lg px-1.5 py-1 border transition-colors ${
+              className={`rounded-lg px-1.5 border transition-colors ${isPortraitPillarbox ? 'mb-1.5 py-0.5' : 'mb-2 py-1'} ${
                 activeMixerChannel === 1
                   ? 'bg-white/[0.06] border-white/15'
                   : 'border-transparent'
               }`}
             >
-              <div className="flex items-center justify-between text-[9.5px] mb-1">
+              <div className={`flex items-center justify-between ${isPortraitPillarbox ? 'text-[8px] mb-0.5' : 'text-[9.5px] mb-1'}`}>
                 <span className="flex items-center gap-1 text-white/85">
                   <Music className="w-2.5 h-2.5 text-white/80" />
-                  Musique XMB
+                  XMB
                 </span>
-                <span className="font-mono text-white/75">{Math.round(musicVolume * 100)}%</span>
+                <span className="font-mono text-white/75 tabular-nums">{Math.round(musicVolume * 100)}%</span>
               </div>
               <input
                 type="range"
@@ -709,28 +709,47 @@ export const J2MEPlayer: React.FC<J2MEPlayerProps> = ({
               <button
                 type="button"
                 onClick={() => applyAudioPreset(1.0, 0, false)}
-                className="py-1 px-1 rounded-md bg-white/[0.07] hover:bg-white/[0.16] text-[8.5px] text-white/85 border border-white/10 cursor-pointer transition-colors"
+                className={`py-1 px-0.5 rounded-md bg-white/[0.07] hover:bg-white/[0.16] ${isPortraitPillarbox ? 'text-[7.5px]' : 'text-[8.5px]'} text-white/85 border border-white/10 cursor-pointer transition-colors`}
               >
-                Jeu seul
+                {isPortraitPillarbox ? 'Jeu' : 'Jeu seul'}
               </button>
               <button
                 type="button"
                 onClick={() => applyAudioPreset(0.45, 0.75, true)}
-                className="py-1 px-1 rounded-md bg-white/[0.07] hover:bg-white/[0.16] text-[8.5px] text-white/85 border border-white/10 cursor-pointer transition-colors"
+                className={`py-1 px-0.5 rounded-md bg-white/[0.07] hover:bg-white/[0.16] ${isPortraitPillarbox ? 'text-[7.5px]' : 'text-[8.5px]'} text-white/85 border border-white/10 cursor-pointer transition-colors`}
               >
-                Mix 45/75
+                {isPortraitPillarbox ? '45/75' : 'Mix 45/75'}
               </button>
               <button
                 type="button"
                 onClick={() => applyAudioPreset(0, 0.9, true)}
-                className="py-1 px-1 rounded-md bg-white/[0.12] hover:bg-white/[0.22] text-[8.5px] text-white border border-white/20 cursor-pointer transition-colors"
+                className={`py-1 px-0.5 rounded-md bg-white/[0.12] hover:bg-white/[0.22] ${isPortraitPillarbox ? 'text-[7.5px]' : 'text-[8.5px]'} text-white border border-white/20 cursor-pointer transition-colors`}
               >
-                Musique
+                {isPortraitPillarbox ? 'Audio' : 'Musique'}
               </button>
             </div>
           </div>
-        </div>
-      )}
+        );
+
+        if (isPortraitPillarbox) {
+          return (
+            <div className="absolute right-2.5 top-2.5 bottom-10 z-30 flex items-center pointer-events-none">
+              <div className="pointer-events-auto max-h-full overflow-y-auto">
+                {mixerCard}
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div
+            className="absolute inset-0 z-40 bg-black/55 backdrop-blur-sm flex items-center justify-center p-3"
+            onClick={() => setIsMixerOpen(false)}
+          >
+            {mixerCard}
+          </div>
+        );
+      })()}
     </div>
   );
 };

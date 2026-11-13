@@ -104,21 +104,40 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
   const [isBootFading, setIsBootFading] = useState<boolean>(false);
   const coldBootVideoRef = useRef<HTMLVideoElement | null>(null);
 
+  const showBrightnessOverlay = useCallback(() => {
+    setShowBrightnessOSD(true);
+    if (brightnessTimerRef.current) clearTimeout(brightnessTimerRef.current);
+    brightnessTimerRef.current = setTimeout(() => setShowBrightnessOSD(false), 2200);
+  }, []);
+
+  const persistBrightness = useCallback((next: BrightnessLevel) => {
+    try {
+      localStorage.setItem('psp_screen_brightness', String(next));
+    } catch {}
+  }, []);
+
   const cycleBrightness = useCallback(() => {
     if (powerState === 'off') return;
     sound.playTick();
     setBrightness((prev) => {
       const idx = BRIGHTNESS_LEVELS.indexOf(prev);
       const next = BRIGHTNESS_LEVELS[(idx + 1) % BRIGHTNESS_LEVELS.length];
-      try {
-        localStorage.setItem('psp_screen_brightness', String(next));
-      } catch {}
+      persistBrightness(next);
       return next;
     });
-    setShowBrightnessOSD(true);
-    if (brightnessTimerRef.current) clearTimeout(brightnessTimerRef.current);
-    brightnessTimerRef.current = setTimeout(() => setShowBrightnessOSD(false), 2200);
-  }, [powerState]);
+    showBrightnessOverlay();
+  }, [powerState, persistBrightness, showBrightnessOverlay]);
+
+  const setBrightnessLevel = useCallback(
+    (next: BrightnessLevel, showOsd = false) => {
+      if (powerState === 'off') return;
+      sound.playTick();
+      setBrightness(next);
+      persistBrightness(next);
+      if (showOsd) showBrightnessOverlay();
+    },
+    [powerState, persistBrightness, showBrightnessOverlay]
+  );
 
   useEffect(() => {
     return () => {
@@ -487,6 +506,7 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
                 onModelChange={handleModelChange}
                 brightness={brightness}
                 onCycleBrightness={cycleBrightness}
+                onBrightnessChange={setBrightnessLevel}
                 externalCommand={externalCommand}
                 debugHitboxes={debugHitboxes}
                 onContextChange={setXmbContext}
@@ -709,10 +729,10 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75 flex items-center justify-center overflow-visible z-30"
             style={{
               ...getHitboxStyle(activeChassis.hotspots.home),
-              opacity: debugHitboxes ? 1 : powerState === 'off' ? 1 : 0,
+              opacity: debugHitboxes ? 1 : powerState === 'off' && activeChassis.id === 'psp-street-e1000-black' ? 1 : 0,
             }}
           >
-            {powerState === 'off' && (
+            {powerState === 'off' && activeChassis.id === 'psp-street-e1000-black' && (
               <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-transparent border border-white/60 shadow-[0_0_16px_5px_rgba(255,255,255,0.9),0_0_32px_10px_rgba(255,255,255,0.45)] animate-pulse pointer-events-none z-30" />
             )}
           </button>
