@@ -12,6 +12,7 @@ import {
   PSPChassisSpec,
   PSP_CHASSIS_CONFIG,
   BrightnessLevel,
+  BRIGHTNESS_LEVELS,
   getBrightnessMeta,
 } from '../types/xmb';
 import { CategoryIcon, PSGlyph, PSPKeycap, DisplayKeycap, MusicNoteKeycap } from './XMBIcons';
@@ -40,6 +41,7 @@ export type XMBSubListType =
   | 'game'
   | 'theme'
   | 'skin'
+  | 'brightness'
   | 'music';
 
 interface NavigationFrame {
@@ -60,6 +62,8 @@ const resolveFolderSubListType = (itemId: string): XMBSubListType => {
       return 'theme';
     case 'psp-skin':
       return 'skin';
+    case 'display-brightness':
+      return 'brightness';
     case 'history-list':
       return 'history';
     case 'video-ms':
@@ -79,6 +83,8 @@ const VISUALIZER_OPTIONS: { id: VisualizerMode; label: string }[] = [
   { id: 'bubbles', label: 'Underwater Bubbles' },
 ];
 
+const BRIGHTNESS_ASC_STEPS: BrightnessLevel[] = [...BRIGHTNESS_LEVELS].reverse();
+
 interface XMBMenuProps {
   currentTheme: PSPTheme;
   onThemeChange: (theme: PSPTheme) => void;
@@ -86,6 +92,7 @@ interface XMBMenuProps {
   onModelChange: (modelId: PSPModelId) => void;
   brightness: BrightnessLevel;
   onCycleBrightness: () => void;
+  onBrightnessChange: (level: BrightnessLevel) => void;
   externalCommand?: { action: string; timestamp: number } | null;
   debugHitboxes?: boolean;
   onContextChange?: (context: XMBContextInfo) => void;
@@ -105,6 +112,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   onModelChange,
   brightness,
   onCycleBrightness,
+  onBrightnessChange,
   externalCommand,
   debugHitboxes: _debugHitboxes = false,
   onContextChange,
@@ -364,7 +372,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     }
   }, [volume]);
 
-  // Démarrage garanti du lecteur vidéo MP4 lors de l'accès au mode 'video_player'
+  // Démarrage du lecteur vidéo MP4 uniquement lors de l'entrée en 'video_player' ou changement de vidéo
   useEffect(() => {
     if (viewMode === 'video_player' && currentVideo && videoRef.current) {
       setVideoError(null);
@@ -382,7 +390,8 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
           });
       }
     }
-  }, [viewMode, currentVideo, volume]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode, currentVideo]);
 
   // Refresh listening history on view change
   useEffect(() => {
@@ -413,7 +422,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       items: [
         { id: 'theme-color', label: 'Thème & Couleurs', sublabel: currentTheme.name, icon: 'theme', type: 'folder' },
         { id: 'psp-skin', label: 'Skin PSP', sublabel: currentChassis.shortName, icon: 'skin', type: 'folder' },
-        { id: 'display-brightness', label: 'Luminosité de l’écran', sublabel: brightnessMeta.label, icon: 'brightness', type: 'action' },
+        { id: 'display-brightness', label: 'Luminosité de l’écran', sublabel: brightnessMeta.label, icon: 'brightness', type: 'folder' },
         { id: 'sound-toggle', label: 'Bip sonore des touches', sublabel: sound.getMuted() ? 'Désactivé' : 'Activé', icon: 'audio', type: 'action' },
         { id: 'about-psp', label: 'Informations système', sublabel: currentChassis.firmwareLabel, icon: 'info', type: 'action' },
       ],
@@ -552,9 +561,11 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     availableSkins,
     currentTheme,
     currentChassis,
+    brightness,
     onThemeChange,
     onModelChange,
     onCycleBrightness,
+    onBrightnessChange,
     cycleVisualizerMode,
     togglePlay,
     playTrack,
@@ -589,9 +600,11 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       availableSkins,
       currentTheme,
       currentChassis,
+      brightness,
       onThemeChange,
       onModelChange,
       onCycleBrightness,
+      onBrightnessChange,
       cycleVisualizerMode,
       togglePlay,
       playTrack,
@@ -756,11 +769,10 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     } else if (currentMode === 'video_player') {
       if (videoRef.current) {
         videoRef.current.pause();
-        videoRef.current.removeAttribute('src');
-        videoRef.current.load();
       }
       setIsVideoPlaying(false);
       setVideoError(null);
+      setVideoProgress({ current: 0, duration: 0 });
       setNavStack((prev) => {
         const last = prev[prev.length - 1];
         if (last && last.view === 'sublist') {
@@ -792,10 +804,10 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     sound.playBack();
     if (videoRef.current) {
       videoRef.current.pause();
-      videoRef.current.removeAttribute('src');
-      videoRef.current.load();
     }
     setIsVideoPlaying(false);
+    setVideoError(null);
+    setVideoProgress({ current: 0, duration: 0 });
     setIsGameBooting(false);
     setCurrentGame(null);
     pendingGameRef.current = null;
@@ -831,6 +843,37 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     }
   };
 
+  const stepBrightness = useCallback((delta: -1 | 1) => {
+    const s = stateRef.current;
+    const currIdx = BRIGHTNESS_ASC_STEPS.indexOf(s.brightness);
+    const safeIdx = currIdx === -1 ? BRIGHTNESS_ASC_STEPS.length - 1 : currIdx;
+    const nextIdx = Math.max(0, Math.min(BRIGHTNESS_ASC_STEPS.length - 1, safeIdx + delta));
+    const nextLevel = BRIGHTNESS_ASC_STEPS[nextIdx];
+    if (nextLevel !== undefined && nextLevel !== s.brightness) {
+      stateRef.current.brightness = nextLevel;
+      s.onBrightnessChange(nextLevel);
+    } else {
+      sound.playTick();
+    }
+  }, []);
+
+  // Changement propre de piste vidéo (laisse key={currentVideo.id} + useEffect lancer la lecture sans conflit)
+  const switchVideoTrack = useCallback(
+    (targetVideo: VideoItem, targetIdx: number) => {
+      setVideoError(null);
+      setVideoProgress({ current: 0, duration: 0 });
+      stateRef.current.currentVideo = targetVideo;
+      stateRef.current.isVideoPlaying = true;
+      stateRef.current.subItemIndex = targetIdx;
+      setCurrentVideo(targetVideo);
+      setIsVideoPlaying(true);
+      setSubItemIndex(targetIdx);
+      triggerVideoHUD();
+      sound.playTick();
+    },
+    [triggerVideoHUD]
+  );
+
   // Lecture de la vidéo suivante (bouclage catalogue videos.json - Chantier 1 & 2)
   const playNextVideo = useCallback(() => {
     const list = stateRef.current.videosList;
@@ -842,17 +885,9 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     const nextIdx = (currIdx + 1) % list.length;
     const nextVideo = list[nextIdx];
     if (nextVideo) {
-      setCurrentVideo(nextVideo);
-      setIsVideoPlaying(true);
-      triggerVideoHUD();
-      sound.playTick();
-      if (videoRef.current) {
-        videoRef.current.src = nextVideo.url;
-        videoRef.current.currentTime = 0;
-        videoRef.current.play().catch(console.warn);
-      }
+      switchVideoTrack(nextVideo, nextIdx);
     }
-  }, [triggerVideoHUD]);
+  }, [switchVideoTrack]);
 
   // Lecture de la vidéo précédente (bouclage catalogue videos.json - Chantier 1)
   const playPreviousVideo = useCallback(() => {
@@ -865,20 +900,14 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     const prevIdx = currIdx > 0 ? currIdx - 1 : list.length - 1;
     const prevVideo = list[prevIdx];
     if (prevVideo) {
-      setCurrentVideo(prevVideo);
-      setIsVideoPlaying(true);
-      triggerVideoHUD();
-      sound.playTick();
-      if (videoRef.current) {
-        videoRef.current.src = prevVideo.url;
-        videoRef.current.currentTime = 0;
-        videoRef.current.play().catch(console.warn);
-      }
+      switchVideoTrack(prevVideo, prevIdx);
     }
-  }, [triggerVideoHUD]);
+  }, [switchVideoTrack]);
 
   const getSubListLength = (s: typeof stateRef.current) =>
-    s.subListType === 'game'
+    s.subListType === 'brightness'
+      ? 0
+      : s.subListType === 'game'
       ? s.gamesList.length
       : s.subListType === 'video'
       ? s.videosList.length
@@ -909,6 +938,10 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     if (s.isOptionsOpen) return;
 
     if (s.viewMode === 'sublist') {
+      if (s.subListType === 'brightness') {
+        stepBrightness(dir === 'left' ? -1 : 1);
+        return;
+      }
       const listLength = getSubListLength(s);
       if (listLength === 0) return;
       sound.playTick();
@@ -1023,6 +1056,14 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
     // 4. AU SEIN D'UN SOUS-DOSSIER (SUBLIST)
     if (s.viewMode === 'sublist') {
+      if (s.subListType === 'brightness') {
+        if (dir === 'left') {
+          stepBrightness(-1);
+        } else if (dir === 'right') {
+          stepBrightness(1);
+        }
+        return;
+      }
       if (dir === 'up') {
         sound.playTick();
         const listLength = getSubListLength(s);
@@ -1137,6 +1178,10 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     // 4. In Sublist: play selected game, video, theme or audio track
     if (s.viewMode === 'sublist') {
       const activeSubIndex = overrideIndex !== undefined ? overrideIndex : s.subItemIndex;
+      if (s.subListType === 'brightness') {
+        handleBack();
+        return;
+      }
       if (s.subListType === 'theme') {
         const selectedTheme = s.officialThemesList[activeSubIndex];
         if (selectedTheme) {
@@ -1165,11 +1210,12 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         const selectedVideo = s.videosList[activeSubIndex];
         if (selectedVideo) {
           pauseTrack();
+          setVideoError(null);
+          setVideoProgress({ current: 0, duration: 0 });
           setCurrentVideo(selectedVideo);
           stateRef.current.currentVideo = selectedVideo;
           setIsVideoPlaying(true);
           stateRef.current.isVideoPlaying = true;
-          setVideoError(null);
           pushState('video_player', 'video');
         }
         return;
@@ -1208,8 +1254,6 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       setHistoryTracks([]);
       setInfoPopup('Historique effacé avec succès.');
       setTimeout(() => setInfoPopup(null), 2500);
-    } else if (currentItem.id === 'display-brightness') {
-      s.onCycleBrightness();
     } else if (currentItem.id === 'sound-toggle') {
       sound.toggleMute();
       setItemIndex((prev) => prev);
@@ -1512,6 +1556,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         >
           {/* Native HTML5 Video with authentic pillarbox / zoom support */}
           <video
+            key={currentVideo.id}
             ref={videoRef}
             src={currentVideo.url}
             autoPlay
@@ -1544,6 +1589,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
             }}
             onError={(e) => {
               const target = e.currentTarget as HTMLVideoElement;
+              if (!target.currentSrc) return;
               console.error('[VideoPlayer] Erreur chargement vidéo:', currentVideo.url, target.error);
               setVideoError(`Impossible de lire cette vidéo (${currentVideo.title}). Fichier introuvable ou format non supporté.`);
               setIsVideoPlaying(false);
@@ -1553,22 +1599,32 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
           {/* Barre Supérieure (Top HUD) */}
           <div
-            className={`absolute top-0 left-0 right-0 p-3 flex justify-between items-center pointer-events-none bg-gradient-to-b from-black/80 to-transparent z-30 transition-opacity duration-300 ${
+            className={`absolute top-0 left-0 right-0 px-4 pt-3 pb-5 flex justify-between items-center pointer-events-none bg-gradient-to-b from-black/80 via-black/35 to-transparent z-30 transition-opacity duration-300 ${
               showVideoHUD || !isVideoPlaying ? 'opacity-100' : 'opacity-0'
             }`}
           >
-            {/* Côté Gauche (Flexbox en ligne) */}
-            <div className="flex items-center gap-3 min-w-0 pr-4">
+            {/* Côté Gauche : Icône Play / Pause épurée + Titre */}
+            <div className="flex items-center gap-2.5 min-w-0 pr-4">
               <span
-                className={`px-1.5 py-0.5 rounded font-mono text-[8px] font-bold border ${
+                aria-label={isVideoPlaying ? 'Lecture en cours' : 'En pause'}
+                className={`w-5 h-5 rounded-full flex items-center justify-center border backdrop-blur-md flex-shrink-0 shadow-sm ${
                   isVideoPlaying
-                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
-                    : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                    ? 'bg-cyan-400/15 text-cyan-300 border-cyan-300/35'
+                    : 'bg-amber-400/15 text-amber-300 border-amber-300/35'
                 }`}
               >
-                {isVideoPlaying ? 'LECTURE' : 'PAUSE'}
+                {isVideoPlaying ? (
+                  <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 fill-current" aria-hidden="true">
+                    <path d="M8 5.5v13l10.5-6.5z" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 fill-current" aria-hidden="true">
+                    <rect x="6.5" y="5" width="3.75" height="14" rx="1" />
+                    <rect x="13.75" y="5" width="3.75" height="14" rx="1" />
+                  </svg>
+                )}
               </span>
-              <span className="truncate max-w-[280px] text-white font-medium text-[11px] drop-shadow">
+              <span className="truncate max-w-[270px] text-white/95 font-medium text-[11px] tracking-wide drop-shadow">
                 {currentVideo.title}
               </span>
             </div>
@@ -1599,11 +1655,11 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
             </div>
           </div>
 
-          {/* Indicateur Central Play / Pause (uniquement en pause) */}
+          {/* Indicateur Central Play (centré géométriquement, uniquement en pause) */}
           {!isVideoPlaying && !videoError && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-25">
-              <div className="w-14 h-14 rounded-full bg-black/60 border border-white/20 flex items-center justify-center text-white/90 shadow-2xl backdrop-blur-sm animate-fade-in">
-                <svg className="w-6 h-6 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+              <div className="w-13 h-13 rounded-full bg-black/50 border border-white/25 flex items-center justify-center text-white/95 shadow-[0_8px_30px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.22)] backdrop-blur-md animate-fade-in">
+                <svg className="w-5 h-5 fill-current translate-x-[1px]" viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M8 5v14l11-7z" />
                 </svg>
               </div>
@@ -1630,33 +1686,79 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
             </div>
           )}
 
-          {/* Barre Inférieure (Bottom HUD) */}
+          {/* Barre Inférieure (Bottom HUD symétrique avec timeline interactive & keycaps PSP) */}
           <div
-            className={`absolute bottom-0 left-0 right-0 p-3 flex flex-col gap-1 bg-gradient-to-t from-black/80 to-transparent z-30 transition-opacity duration-300 ${
-              showVideoHUD || !isVideoPlaying ? 'opacity-100' : 'opacity-0'
+            onClick={(e) => e.stopPropagation()}
+            className={`absolute bottom-0 left-0 right-0 px-4 pt-5 pb-2.5 flex flex-col gap-1.5 bg-gradient-to-t from-black/85 via-black/45 to-transparent z-30 transition-opacity duration-300 ${
+              showVideoHUD || !isVideoPlaying ? 'opacity-100' : 'opacity-0 pointer-events-none'
             }`}
           >
-            {/* Ligne 1: Timeline & Timestamps */}
-            <div className="flex items-center gap-2 text-[9px] font-mono text-white/80">
-              <span className="min-w-[28px] text-right">{formatTime(videoProgress.current)}</span>
-              <div className="flex-1 h-1 bg-white/20 rounded overflow-hidden shadow-inner">
-                <div
-                  className="h-full bg-gradient-to-r from-cyan-400 to-blue-500 rounded transition-all duration-150"
-                  style={{
-                    width: `${
-                      videoProgress.duration > 0
-                        ? Math.min(100, (videoProgress.current / videoProgress.duration) * 100)
-                        : 0
-                    }%`,
-                  }}
-                />
+            {/* Ligne 1: Timeline interactive & Timestamps symétriques */}
+            <div className="flex items-center gap-2.5 text-[9px] font-mono text-white/85 tabular-nums">
+              <span className="w-9 text-left shrink-0">{formatTime(videoProgress.current)}</span>
+              <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!videoRef.current || !videoProgress.duration) return;
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                  const nextTime = pct * videoProgress.duration;
+                  videoRef.current.currentTime = nextTime;
+                  setVideoProgress({ current: nextTime, duration: videoProgress.duration });
+                  triggerVideoHUD();
+                }}
+                className="group relative flex-1 h-3 flex items-center cursor-pointer"
+              >
+                <div className="w-full h-1 rounded-full bg-white/20 relative">
+                  <div
+                    className="h-full bg-gradient-to-r from-cyan-400 to-sky-300 rounded-full transition-all duration-150 shadow-[0_0_8px_rgba(34,211,238,0.6)]"
+                    style={{
+                      width: `${
+                        videoProgress.duration > 0
+                          ? Math.min(100, (videoProgress.current / videoProgress.duration) * 100)
+                          : 0
+                      }%`,
+                    }}
+                  />
+                  <div
+                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.95)] transition-transform duration-150 group-hover:scale-125 pointer-events-none"
+                    style={{
+                      left: `${
+                        videoProgress.duration > 0
+                          ? Math.min(100, (videoProgress.current / videoProgress.duration) * 100)
+                          : 0
+                      }%`,
+                    }}
+                  />
+                </div>
               </div>
-              <span className="min-w-[28px]">{formatTime(videoProgress.duration)}</span>
+              <span className="w-9 text-right shrink-0 text-white/65">{formatTime(videoProgress.duration)}</span>
             </div>
 
-            {/* Ligne 2: Aide mémoire touches PSP */}
-            <div className="text-[8px] font-mono text-white/50 text-center">
-              [L/R] Vidéo Préc./Suiv. • ✕ Play/Pause • ◯ Quitter • ◄/► ±5s
+            {/* Ligne 2: Aide mémoire touches PSP (style harmonisé AudioPlayer) */}
+            <div className="flex items-center justify-center gap-3 text-[7.5px] text-white/70 font-medium select-none pointer-events-none whitespace-nowrap">
+              <span className="flex items-center gap-1">
+                <span className="inline-flex items-center gap-0.5">
+                  <PSPKeycap shape="circle">L</PSPKeycap>
+                  <PSPKeycap shape="circle">R</PSPKeycap>
+                </span>
+                <span>Préc. / Suiv.</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <PSGlyph type="cross" size={10} />
+                <span>{isVideoPlaying ? 'Pause' : 'Lecture'}</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <PSGlyph type="circle" size={10} />
+                <span>Quitter</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-flex items-center gap-0.5">
+                  <PSPKeycap shape="circle">◄</PSPKeycap>
+                  <PSPKeycap shape="circle">►</PSPKeycap>
+                </span>
+                <span>±5s</span>
+              </span>
             </div>
           </div>
         </div>
@@ -1895,6 +1997,110 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                   );
                 })}
               </div>
+            ) : subListType === 'brightness' ? (
+              // Sous-menu interactif Luminosité (◄ / ► ou clic sur palier)
+              <div className="pt-4 pr-2">
+                <div className="rounded-xl px-4 py-3.5 bg-gradient-to-b from-white/[0.14] via-zinc-900/50 to-black/60 backdrop-blur-2xl border border-white/25 shadow-[0_12px_32px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.24)]">
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-6 h-6 rounded-lg bg-white/10 border border-white/15 flex items-center justify-center text-cyan-200 flex-shrink-0">
+                        <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="4" />
+                          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+                        </svg>
+                      </span>
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-[11px] font-semibold text-white tracking-wide truncate">
+                          Luminosité de l’écran
+                        </span>
+                        <span className="text-[8.5px] font-mono text-white/55">
+                          5 paliers LCD PSP
+                        </span>
+                      </div>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full bg-white/12 border border-white/20 text-[9.5px] font-mono font-bold text-cyan-200 shrink-0 tabular-nums">
+                      {brightnessMeta.label}
+                    </span>
+                  </div>
+
+                  {/* Barre de sélection interactive à 5 paliers */}
+                  <div className="flex items-center gap-2 mb-3">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        stepBrightness(-1);
+                      }}
+                      aria-label="Diminuer la luminosité"
+                      className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 active:scale-95 border border-white/20 text-white/90 text-xs font-bold flex items-center justify-center transition cursor-pointer"
+                    >
+                      −
+                    </button>
+
+                    <div className="flex-1 flex items-end gap-1.5 h-9 px-2 py-1.5 rounded-lg bg-black/35 border border-white/10">
+                      {BRIGHTNESS_ASC_STEPS.map((lvl, idx) => {
+                        const isActive = lvl <= brightness;
+                        const isCurrent = lvl === brightness;
+                        const heightPct = 36 + idx * 16;
+                        return (
+                          <button
+                            key={lvl}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (lvl !== brightness) {
+                                stateRef.current.brightness = lvl;
+                                onBrightnessChange(lvl);
+                              } else {
+                                sound.playTick();
+                              }
+                            }}
+                            title={`${lvl}%`}
+                            aria-label={`Luminosité ${lvl}%`}
+                            className="flex-1 h-full flex items-end justify-center cursor-pointer group"
+                          >
+                            <span
+                              style={{ height: `${heightPct}%` }}
+                              className={`w-full rounded-[3px] transition-all duration-200 ${
+                                isActive
+                                  ? 'bg-gradient-to-t from-sky-400 to-cyan-200 shadow-[0_0_10px_rgba(56,189,248,0.55)]'
+                                  : 'bg-white/15 group-hover:bg-white/30'
+                              } ${isCurrent ? 'ring-1 ring-white scale-[1.03]' : ''}`}
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        stepBrightness(1);
+                      }}
+                      aria-label="Augmenter la luminosité"
+                      className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 active:scale-95 border border-white/20 text-white/90 text-xs font-bold flex items-center justify-center transition cursor-pointer"
+                    >
+                      +
+                    </button>
+                  </div>
+
+                  {/* Guide touches contextuel */}
+                  <div className="flex items-center justify-between text-[8px] text-white/65 pt-2 border-t border-white/10">
+                    <span className="flex items-center gap-1">
+                      <PSPKeycap shape="circle">◄</PSPKeycap>
+                      <PSPKeycap shape="circle">►</PSPKeycap>
+                      <span>Ajuster</span>
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <PSGlyph type="cross" size={9} />
+                      <span>/</span>
+                      <PSGlyph type="circle" size={9} />
+                      <span>Valider & Retour</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
             ) : (
               // Sublist View (Memory Stick, Search Results, History, Videos, Games, Theme, Skin)
               <div
@@ -1984,20 +2190,15 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                             className="w-full h-full object-contain"
                           />
                         </div>
-                        <div className="flex flex-col min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[11px] font-bold truncate text-white drop-shadow">
-                              {skin.shortName}
-                            </span>
-                            {isActiveSkin && (
-                              <span className="text-[8px] px-1 rounded bg-emerald-500/80 text-black font-mono font-bold flex-shrink-0">
-                                ACTIF
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-[8.5px] text-white/70 font-mono truncate">
-                            {skin.description}
+                        <div className="flex items-center min-w-0 flex-1 gap-1.5">
+                          <span className="text-[11px] font-bold truncate text-white drop-shadow">
+                            {skin.shortName}
                           </span>
+                          {isActiveSkin && (
+                            <span className="text-[8px] px-1 rounded bg-emerald-500/80 text-black font-mono font-bold flex-shrink-0">
+                              ACTIF
+                            </span>
+                          )}
                         </div>
                       </div>
                     );
@@ -2437,12 +2638,26 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         </div>
       )}
 
-      {/* 8. INFO POPUP NOTIFICATION */}
-      {infoPopup && (
-        <div className="absolute top-12 right-4 max-w-xs bg-black/90 backdrop-blur-md border border-white/25 rounded-xl p-2.5 text-[10px] text-white shadow-2xl z-40 animate-fade-in whitespace-pre-line">
-          {infoPopup}
-        </div>
-      )}
+      {/* 8. INFO POPUP NOTIFICATION (Glassmorphism fumé XMB) */}
+      {infoPopup && (() => {
+        const sepIdx = infoPopup.indexOf(' : ');
+        const hasDetail = sepIdx !== -1;
+        const popupTitle = hasDetail ? infoPopup.slice(0, sepIdx) : 'Système PSP';
+        const popupDetail = hasDetail ? infoPopup.slice(sepIdx + 3) : infoPopup;
+        return (
+          <div className="absolute top-11 right-3.5 max-w-[245px] bg-gradient-to-b from-white/[0.15] via-zinc-900/55 to-black/65 backdrop-blur-2xl border border-white/25 rounded-xl px-3 py-2 text-white shadow-[0_12px_32px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.28)] z-40 animate-fade-in">
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-300 shadow-[0_0_8px_rgba(103,232,249,0.9)] flex-shrink-0" />
+              <span className="text-[8px] font-mono uppercase tracking-wider text-white/65 truncate">
+                {popupTitle}
+              </span>
+            </div>
+            <p className="text-[10.5px] font-medium text-white/95 leading-snug drop-shadow-sm whitespace-pre-line">
+              {popupDetail}
+            </p>
+          </div>
+        );
+      })()}
 
       {/* 9. BOTTOM CONTROLS BAR (Calée au bas de l'écran LCD, masquée en lecteur vidéo, audio et jeu - Chantier 2) */}
       {viewMode !== 'video_player' && viewMode !== 'player' && viewMode !== 'game_screen' && (
