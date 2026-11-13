@@ -501,61 +501,65 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
                 />
               )}
 
-              {/* Authentic PSP Volume OSD Overlay */}
+              {/* OSD Volume XMB verre fumé (glassmorphism transparent) */}
               {showVolumeOSD && (
-                <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-50 bg-[#121620]/95 backdrop-blur-md border border-white/25 rounded-md px-3.5 py-1.5 flex items-center gap-2.5 shadow-2xl animate-fade-in pointer-events-none">
-                  <span className="text-xs text-white/90">🔊</span>
-                  <div className="flex gap-[2px] items-center">
-                    {Array.from({ length: 24 }).map((_, i) => {
-                      const filled = i < Math.round(volume * 24);
+                <div className="absolute bottom-7 left-1/2 -translate-x-1/2 z-50 bg-gradient-to-b from-white/[0.16] via-white/[0.08] to-black/35 backdrop-blur-xl border border-white/25 rounded-full px-3.5 py-1.5 flex items-center gap-2.5 shadow-[0_8px_28px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.28)] animate-fade-in pointer-events-none">
+                  <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-white/90 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                  </svg>
+                  <div className="flex gap-[2.5px] items-center">
+                    {Array.from({ length: 20 }).map((_, i) => {
+                      const filled = i < Math.round(volume * 20);
                       return (
                         <div
                           key={i}
-                          className={`w-1.5 h-3 rounded-[1px] transition-colors ${
+                          className={`w-[3px] h-2.5 rounded-full transition-all duration-150 ${
                             filled
-                              ? 'bg-emerald-400 shadow-[0_0_4px_#34d399]'
+                              ? 'bg-white/95 shadow-[0_0_6px_rgba(255,255,255,0.7)]'
                               : 'bg-white/15'
                           }`}
                         />
                       );
                     })}
                   </div>
-                  <span className="text-[10px] font-mono font-bold text-white/90 min-w-[20px] text-right">
+                  <span className="text-[9.5px] font-medium tracking-wider text-white/90 min-w-[18px] text-right tabular-nums">
                     {Math.round(volume * 30)}
                   </span>
                 </div>
               )}
 
-              {/* OSD Luminosité à 5 paliers */}
+              {/* OSD Luminosité XMB verre fumé (glassmorphism transparent à 5 paliers) */}
               {showBrightnessOSD && (
                 <div
-                  className={`absolute left-1/2 -translate-x-1/2 z-50 bg-[#121620]/95 backdrop-blur-md border border-white/25 rounded-md px-3.5 py-1.5 flex items-center gap-2.5 shadow-2xl animate-fade-in pointer-events-none transition-all ${
-                    showVolumeOSD ? 'bottom-14' : 'bottom-5'
+                  className={`absolute left-1/2 -translate-x-1/2 z-50 bg-gradient-to-b from-white/[0.16] via-white/[0.08] to-black/35 backdrop-blur-xl border border-white/25 rounded-full px-3.5 py-1.5 flex items-center gap-2.5 shadow-[0_8px_28px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.28)] animate-fade-in pointer-events-none transition-all ${
+                    showVolumeOSD ? 'bottom-16' : 'bottom-7'
                   }`}
                 >
-                  <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-amber-300 shrink-0" fill="none" stroke="currentColor" strokeWidth="2">
+                  <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-white/90 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="12" cy="12" r="4" />
                     <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
                   </svg>
-                  <div className="flex gap-1 items-center">
+                  <div className="flex gap-1.5 items-center">
                     {Array.from({ length: BRIGHTNESS_LEVELS.length }).map((_, i) => {
                       const filled = i < brightnessMeta.step;
                       return (
                         <div
                           key={i}
-                          className={`w-3 h-2.5 rounded-[2px] transition-colors ${
+                          className={`w-4 h-1.5 rounded-full transition-all duration-200 ${
                             filled
                               ? brightnessMeta.isNight
-                                ? 'bg-indigo-400 shadow-[0_0_5px_#818cf8]'
-                                : 'bg-amber-300 shadow-[0_0_5px_#fcd34d]'
+                                ? 'bg-white/75 shadow-[0_0_6px_rgba(255,255,255,0.45)]'
+                                : 'bg-white/95 shadow-[0_0_8px_rgba(255,255,255,0.75)]'
                               : 'bg-white/15'
                           }`}
                         />
                       );
                     })}
                   </div>
-                  <span className="text-[10px] font-mono font-bold text-white/90 whitespace-nowrap">
-                    {brightnessMeta.isNight ? `${brightness}% Nuit` : `${brightness}%`}
+                  <span className="text-[9.5px] font-medium tracking-wider text-white/90 whitespace-nowrap tabular-nums">
+                    {brightnessMeta.isNight ? `${brightness}% · Nuit` : `${brightness}%`}
                   </span>
                 </div>
               )}
