@@ -796,7 +796,7 @@ export const RetroBrickGame: React.FC<RetroBrickGameProps> = ({
 
       {/* Ligne d'aide unique et épurée au bas de l'écran (Chantier 1) */}
       <div className="absolute bottom-1.5 left-0 right-0 flex items-center justify-center text-[8.5px] font-mono text-white/60 pointer-events-none z-10 tracking-wide">
-        [Trackpad] Déplacer • [Clic / ✕] Lancer • [SELECT] Mixeur • [◯] Quitter
+        [Trackpad] Déplacer • [Clic / ✕] Lancer • [♪ / SELECT] Mixeur • [◯] Quitter
       </div>
 
       {/* Overlay Rétro Mixeur Multipiste - Format Panoramique Glassmorphism Sobre */}

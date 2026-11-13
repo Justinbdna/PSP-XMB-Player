@@ -133,7 +133,7 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
       const paddingY = 4; // Bord à bord vertical strict
 
       const targetWidth = 940;
-      const targetHeight = 460;
+      const targetHeight = powerState === 'off' ? 460 : 405;
 
       const availableWidth = Math.max(300, vw - paddingX);
       const availableHeight = Math.max(200, vh - paddingY);
@@ -165,7 +165,7 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
       window.removeEventListener('resize', updateScale);
       window.removeEventListener('orientationchange', updateScale);
     };
-  }, []);
+  }, [powerState]);
 
   // Send command to XMB screen without losing focus
   const sendCommand = useCallback((action: string) => {
@@ -640,9 +640,9 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
       </div>
     </div>
 
-      {/* 2. La capsule d'aide : EN DEHORS ET EN DESSOUS DU CHÂSSIS */}
-      <div className="mt-6 z-30 flex items-center justify-center flex-shrink-0">
-        {powerState === 'off' ? (
+      {/* 2. La capsule d'aide : uniquement en veille pour indiquer le bouton d'allumage */}
+      {powerState === 'off' && (
+        <div className="mt-6 z-30 flex items-center justify-center flex-shrink-0">
           <button
             onClick={handlePowerOn}
             className="px-6 py-2.5 rounded-full bg-white/10 hover:bg-white/15 border border-white/20 backdrop-blur-xl transition-all duration-300 shadow-[0_4px_20px_rgba(0,0,0,0.5)] group cursor-pointer"
@@ -651,34 +651,8 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
               <span className="text-base text-cyan-300">↖</span> Cliquez sur le bouton PlayStation pour allumer
             </p>
           </button>
-        ) : powerState === 'booting' ? (
-          <div className="px-6 py-2 rounded-full bg-black/60 border border-white/10 backdrop-blur-md shadow-lg">
-            <p className="text-xs font-mono text-white/80 flex items-center gap-1.5 tracking-wide">
-              <span>Démarrage de la PSP</span>
-              <span className="inline-flex gap-1 items-center ml-0.5">
-                <span
-                  className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"
-                  style={{ animationDuration: '1s', animationDelay: '0ms' }}
-                />
-                <span
-                  className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"
-                  style={{ animationDuration: '1s', animationDelay: '250ms' }}
-                />
-                <span
-                  className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"
-                  style={{ animationDuration: '1s', animationDelay: '500ms' }}
-                />
-              </span>
-            </p>
-          </div>
-        ) : (
-          <div className="mt-4 px-6 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-md shadow-md">
-            <p className="text-xs font-mono text-white/70 tracking-wider">
-              🎮 D-Pad / Flèches • ♪ Musique (M) • Ⓢ Home • ✕ Valider • ◯ Retour • SELECT • START
-            </p>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

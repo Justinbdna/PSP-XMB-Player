@@ -47,6 +47,14 @@ const formatTime = (seconds: number): string => {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
+const MusicNoteKeycap: React.FC = () => (
+  <span className="inline-flex items-center justify-center px-1 py-0.5 rounded bg-white/15 border border-white/25 text-white/90 leading-none">
+    <svg viewBox="0 0 24 24" className="w-2.5 h-2.5" fill="currentColor" aria-hidden="true">
+      <path d="M13 4v10.55A3.5 3.5 0 1 0 14.8 18V8.4l4.7 1.35V6.6L13 4z" />
+    </svg>
+  </span>
+);
+
 export const XMBMenu: React.FC<XMBMenuProps> = ({
   currentTheme,
   onThemeChange,
@@ -1585,30 +1593,36 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
               />
             </div>
             {/* Barre de commandes enrichie avec boutons et glyphes PlayStation officiels */}
-            <div className="flex items-center justify-center gap-2.5 sm:gap-3.5 text-[8px] sm:text-[8.5px] text-white/70 font-medium mt-1 select-none pointer-events-none">
+            <div className="flex items-center justify-center gap-1.5 text-[7.5px] text-white/70 font-medium mt-1 select-none pointer-events-none whitespace-nowrap">
               <span className="flex items-center gap-1">
                 <span className="inline-flex gap-0.5">
-                  <span className="px-1 py-0.5 rounded bg-white/15 border border-white/25 text-[7px] font-mono font-bold text-white/90 leading-none">L</span>
-                  <span className="px-1 py-0.5 rounded bg-white/15 border border-white/25 text-[7px] font-mono font-bold text-white/90 leading-none">R</span>
+                  <span className="px-1 py-0.5 rounded bg-white/15 border border-white/25 text-[6.5px] font-mono font-bold text-white/90 leading-none">L</span>
+                  <span className="px-1 py-0.5 rounded bg-white/15 border border-white/25 text-[6.5px] font-mono font-bold text-white/90 leading-none">R</span>
                 </span>
                 <span>Préc. / Suiv.</span>
               </span>
               <span className="flex items-center gap-1">
-                <PSGlyph type="cross" size={11} />
+                <PSGlyph type="cross" size={10} />
                 <span>{isPlaying ? 'Pause' : 'Lecture'}</span>
               </span>
               <span className="flex items-center gap-1">
-                <PSGlyph type="circle" size={11} />
+                <PSGlyph type="circle" size={10} />
                 <span>Retour</span>
               </span>
               <span className="flex items-center gap-1">
-                <span className="px-1 py-0.5 rounded bg-white/15 border border-white/25 text-[7px] font-mono font-bold text-white/90 leading-none">SELECT</span>
+                <span className="px-1 py-0.5 rounded bg-white/15 border border-white/25 text-[6.5px] font-mono font-bold text-white/90 leading-none">SELECT</span>
                 <span>Visualiseur</span>
               </span>
               <span className="flex items-center gap-1">
-                <PSGlyph type="triangle" size={11} />
+                <PSGlyph type="triangle" size={10} />
                 <span>Options</span>
               </span>
+              <span className="flex items-center gap-1" title="Touche Note de Musique">
+                <MusicNoteKeycap />
+                <span>Musique</span>
+              </span>
+              <span className="px-1 py-0.5 rounded bg-white/15 border border-white/25 text-[6.5px] font-mono font-bold text-white/90 leading-none">START</span>
+              <span className="px-1 py-0.5 rounded bg-white/15 border border-white/25 text-[6.5px] font-mono font-bold text-white/90 leading-none">HOME</span>
             </div>
           </div>
         </div>
@@ -2236,24 +2250,36 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
       {/* 9. BOTTOM CONTROLS BAR (Calée au bas de l'écran LCD, masquée en lecteur vidéo, audio et jeu - Chantier 2) */}
       {viewMode !== 'video_player' && viewMode !== 'player' && viewMode !== 'game_screen' && (
-        <div className="absolute bottom-1 left-3 right-3 flex items-center justify-between text-[8.5px] text-white/60 font-medium z-30 pointer-events-none">
-          <div className="flex items-center gap-3">
+        <div className="absolute bottom-1 left-3 right-3 flex items-center justify-between gap-2 text-[7.5px] text-white/65 font-medium z-30 pointer-events-none whitespace-nowrap">
+          <div className="flex items-center gap-2">
             <span className="flex items-center gap-1">
-              <PSGlyph type="cross" size={11} />
+              <PSGlyph type="cross" size={10} />
               <span>Valider / Entrer</span>
             </span>
             <span className="flex items-center gap-1">
-              <PSGlyph type="circle" size={11} />
+              <PSGlyph type="circle" size={10} />
               <span>Retour</span>
             </span>
             <span className="flex items-center gap-1">
-              <PSGlyph type="square" size={11} />
+              <PSGlyph type="square" size={10} />
               <span>Play / Pause</span>
             </span>
             <span className="flex items-center gap-1">
-              <PSGlyph type="triangle" size={11} />
+              <PSGlyph type="triangle" size={10} />
               <span>Options</span>
             </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="flex items-center gap-1">
+              <MusicNoteKeycap />
+              <span>Musique</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="px-1 py-0.5 rounded bg-white/15 border border-white/25 text-[6.5px] font-mono font-bold text-white/90 leading-none">SELECT</span>
+              <span>Thème</span>
+            </span>
+            <span className="px-1 py-0.5 rounded bg-white/15 border border-white/25 text-[6.5px] font-mono font-bold text-white/90 leading-none">START</span>
+            <span className="px-1 py-0.5 rounded bg-white/15 border border-white/25 text-[6.5px] font-mono font-bold text-white/90 leading-none">HOME</span>
           </div>
         </div>
       )}
