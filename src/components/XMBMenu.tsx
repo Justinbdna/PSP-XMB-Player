@@ -550,8 +550,16 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     currentGame,
     officialThemesList,
     availableSkins,
+    currentTheme,
+    currentChassis,
+    onThemeChange,
     onModelChange,
     onCycleBrightness,
+    cycleVisualizerMode,
+    togglePlay,
+    playTrack,
+    localTracks,
+    itunesTracks,
     isOptionsOpen,
     optionVisualizerIndex,
     isSearchModalOpen,
@@ -579,8 +587,16 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       currentGame,
       officialThemesList,
       availableSkins,
+      currentTheme,
+      currentChassis,
+      onThemeChange,
       onModelChange,
       onCycleBrightness,
+      cycleVisualizerMode,
+      togglePlay,
+      playTrack,
+      localTracks,
+      itunesTracks,
       isOptionsOpen,
       optionVisualizerIndex,
       isSearchModalOpen,
@@ -624,8 +640,16 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     setViewMode(newView);
     if (nextSubListType) setSubListType(nextSubListType);
     if (newView === 'sublist') {
-      setSubItemIndex(0);
-      stateRef.current.subItemIndex = 0;
+      let initialSubIdx = 0;
+      if (nextSubListType === 'theme') {
+        const activeThemeIdx = current.officialThemesList.findIndex((t) => t.id === current.currentTheme.id);
+        if (activeThemeIdx >= 0) initialSubIdx = activeThemeIdx;
+      } else if (nextSubListType === 'skin') {
+        const activeSkinIdx = current.availableSkins.findIndex((sk) => sk.id === current.currentChassis.id);
+        if (activeSkinIdx >= 0) initialSubIdx = activeSkinIdx;
+      }
+      setSubItemIndex(initialSubIdx);
+      stateRef.current.subItemIndex = initialSubIdx;
     }
     setIsOptionsOpen(false);
     stateRef.current.viewMode = newView;
@@ -782,17 +806,27 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     setIsOptionsOpen(false);
     setIsSearchModalOpen(false);
     setInfoPopup(null);
+    stateRef.current.isVideoPlaying = false;
+    stateRef.current.isGameBooting = false;
+    stateRef.current.currentGame = null;
+    stateRef.current.navStack = [];
+    stateRef.current.viewMode = 'menu';
+    stateRef.current.itemIndex = 0;
+    stateRef.current.subItemIndex = 0;
+    stateRef.current.isOptionsOpen = false;
+    stateRef.current.isSearchModalOpen = false;
   };
 
   // Select Button (Cycle le visualiseur audio dans le lecteur ou le thème officiel dans le menu)
   const handleSelect = () => {
-    if (stateRef.current.viewMode === 'player') {
-      cycleVisualizerMode();
+    const s = stateRef.current;
+    if (s.viewMode === 'player') {
+      s.cycleVisualizerMode();
     } else {
-      const themesList = Object.values(PSP_OFFICIAL_THEMES);
-      const currIdx = themesList.findIndex((t) => t.id === currentTheme.id);
+      const themesList = s.officialThemesList;
+      const currIdx = themesList.findIndex((t) => t.id === s.currentTheme.id);
       const nextTheme = themesList[(currIdx + 1) % themesList.length];
-      onThemeChange(nextTheme);
+      if (nextTheme) s.onThemeChange(nextTheme);
       sound.playTick();
     }
   };
@@ -1115,8 +1149,6 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
     if (currentItem.type === 'folder' || currentItem.id === 'music-ms' || currentItem.id === 'music-itunes') {
       try { sound.playEnter(); } catch (e) {}
-      setSubItemIndex(0);
-      stateRef.current.subItemIndex = 0;
       pushState('sublist', resolveFolderSubListType(currentItem.id));
       return;
     } else if (currentItem.id === 'game-1' || currentItem.type === 'game') {
@@ -1312,11 +1344,12 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       } else if (key === 'm') {
         e.preventDefault();
         sound.playOption();
-        if (currentTrack) {
-          togglePlay();
+        const s = stateRef.current;
+        if (s.currentTrack) {
+          s.togglePlay();
         } else {
-          const fallbackList = localTracks.length > 0 ? localTracks : itunesTracks;
-          if (fallbackList.length > 0) playTrack(fallbackList[0], fallbackList);
+          const fallbackList = s.localTracks.length > 0 ? s.localTracks : s.itunesTracks;
+          if (fallbackList.length > 0) s.playTrack(fallbackList[0], fallbackList);
         }
       }
     };
@@ -1348,12 +1381,18 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                 >
                   {isPlaying ? '▶' : '❚❚'}
                 </span>
-                <div className="overflow-hidden whitespace-nowrap flex-1 min-w-0">
+                <div
+                  className="overflow-hidden whitespace-nowrap flex-1 min-w-0"
+                  style={{
+                    WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 6%, black 88%, transparent 100%)',
+                    maskImage: 'linear-gradient(to right, transparent 0%, black 6%, black 88%, transparent 100%)',
+                  }}
+                >
                   <div className="inline-flex animate-marquee">
-                    <span className="text-[8.5px] text-white/90 font-mono pr-4">
+                    <span className="text-[8.5px] text-white/90 font-mono pr-5">
                       {currentTrack.title} — {currentTrack.artist}
                     </span>
-                    <span className="text-[8.5px] text-white/90 font-mono pr-4">
+                    <span className="text-[8.5px] text-white/90 font-mono pr-5">
                       {currentTrack.title} — {currentTrack.artist}
                     </span>
                   </div>
@@ -1731,14 +1770,20 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
             })}
           </div>
 
-          {/* Vertical Items Column */}
-          <div className="absolute left-[108px] top-26 bottom-8 w-[370px] z-10 transition-all duration-300 ease-out overflow-hidden">
+          {/* Vertical Items Column (avec fondu haut/bas fluide façon XMB pour ne jamais couper une ligne net) */}
+          <div
+            className="absolute left-[108px] top-[96px] bottom-7 w-[370px] z-10 transition-all duration-300 ease-out overflow-hidden"
+            style={{
+              WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 16%, black 90%, transparent 100%)',
+              maskImage: 'linear-gradient(to bottom, transparent 0%, black 16%, black 90%, transparent 100%)',
+            }}
+          >
             {viewMode === 'menu' ? (
               // Main Category Items List
               <div
                 className="flex flex-col transition-transform duration-250 ease-out"
                 style={{
-                  transform: `translateY(calc(30px - ${itemIndex * 46}px))`,
+                  transform: `translateY(calc(38px - ${itemIndex * 46}px))`,
                 }}
               >
                 {activeItems.map((item, idx) => {
@@ -1761,8 +1806,6 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                         stateRef.current.itemIndex = idx;
                         if (item.type === 'folder' || item.id === 'music-ms' || item.id === 'music-itunes') {
                           try { sound.playEnter(); } catch (err) {}
-                          setSubItemIndex(0);
-                          stateRef.current.subItemIndex = 0;
                           pushState('sublist', resolveFolderSubListType(item.id));
                         } else if (isGame) {
                           launchRetroGame(item);
@@ -1814,11 +1857,11 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                 })}
               </div>
             ) : (
-              // Sublist View (Memory Stick, Search Results, History, Videos, Games, Theme)
+              // Sublist View (Memory Stick, Search Results, History, Videos, Games, Theme, Skin)
               <div
                 className="flex flex-col transition-transform duration-250 ease-out"
                 style={{
-                  transform: `translateY(calc(30px - ${subItemIndex * 48}px))`,
+                  transform: `translateY(calc(38px - ${subItemIndex * 48}px))`,
                 }}
               >
                 {/* 1. Theme Color Chooser (Paramètres ➔ Thème & Couleurs) */}
@@ -2326,7 +2369,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                 <>
                   <div>
                     <span className="text-[10px] text-white/40 uppercase tracking-wider block font-mono mb-0.5">Système</span>
-                    <span className="text-sm font-medium text-white block">Sony PSP Street</span>
+                    <span className="text-sm font-medium text-white block">{currentChassis.name}</span>
                   </div>
                   <div>
                     <span className="text-[10px] text-white/40 uppercase tracking-wider block font-mono mb-0.5">Firmware</span>
@@ -2335,6 +2378,10 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                   <div>
                     <span className="text-[10px] text-white/40 uppercase tracking-wider block font-mono mb-0.5">Catégorie active</span>
                     <span className="text-white/80 text-xs block">{activeCategory.name}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-white/40 uppercase tracking-wider block font-mono mb-0.5">Luminosité écran</span>
+                    <span className="text-white/90 font-mono text-xs">{brightnessMeta.label}</span>
                   </div>
                   <div>
                     <span className="text-[10px] text-white/40 uppercase tracking-wider block font-mono mb-0.5">Volume principal</span>
