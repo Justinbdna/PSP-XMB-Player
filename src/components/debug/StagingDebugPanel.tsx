@@ -78,6 +78,7 @@ export const StagingDebugPanel: React.FC<StagingDebugPanelProps> = ({
         ']': 'Gâchette R (])',
         tab: 'SELECT (Tab)',
         v: 'SELECT (V)',
+        m: '♪ Note Musique (M)',
         h: 'PS Home (H)',
       };
 

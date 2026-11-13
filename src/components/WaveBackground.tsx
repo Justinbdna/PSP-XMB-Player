@@ -3,9 +3,10 @@ import { PSPTheme } from '../types/xmb';
 
 interface WaveBackgroundProps {
   theme: PSPTheme;
+  paused?: boolean;
 }
 
-export const WaveBackground: React.FC<WaveBackgroundProps> = ({ theme }) => {
+export const WaveBackground: React.FC<WaveBackgroundProps> = ({ theme, paused = false }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -91,16 +92,18 @@ export const WaveBackground: React.FC<WaveBackgroundProps> = ({ theme }) => {
       drawWave(36, 0.005, 0.5, theme.waveColor2, 0.58, 2.5);
       drawWave(20, 0.009, 1.1, theme.waveColor3, 0.72, 4.2);
 
-      animationFrameId = requestAnimationFrame(render);
+      if (!paused) {
+        animationFrameId = requestAnimationFrame(render);
+      }
     };
 
     render();
 
     return () => {
       window.removeEventListener('resize', resize);
-      cancelAnimationFrame(animationFrameId);
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
     };
-  }, [theme]);
+  }, [theme, paused]);
 
   return (
     <canvas

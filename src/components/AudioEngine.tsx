@@ -58,8 +58,13 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const currentTrackRef = useRef<Track | null>(null);
 
-  const [playlist, setPlaylistState] = useState<Track[]>(itunesPlaylist as Track[]);
-  const playlistRef = useRef<Track[]>(itunesPlaylist as Track[]);
+  const defaultPlaylist: Track[] =
+    (localTracksData as Track[]).length > 0
+      ? (localTracksData as Track[])
+      : (itunesPlaylist as Track[]);
+
+  const [playlist, setPlaylistState] = useState<Track[]>(defaultPlaylist);
+  const playlistRef = useRef<Track[]>(defaultPlaylist);
 
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const isPlayingRef = useRef<boolean>(false);

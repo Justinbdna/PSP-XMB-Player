@@ -14,6 +14,7 @@ import { sound } from '../services/sound';
 import { useAudio } from './AudioEngine';
 import { AudioVisualizer } from './AudioVisualizer';
 import { RetroBrickGame } from './games/RetroBrickGame';
+import { J2MEPlayer } from './games/J2MEPlayer';
 
 export type XMBViewMode = 'menu' | 'sublist' | 'player' | 'video_player' | 'game_screen';
 
@@ -123,8 +124,10 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   const [gamesList] = useState<GameItem[]>(gamesData as GameItem[]);
   const [currentGame, setCurrentGame] = useState<GameItem | null>(null);
 
-  // Étape 3 : État de boot UMD (Lancement du jeu)
+  // Étape 3 : État de boot UMD (Lancement du jeu) & Préchargement silencieux J2ME
   const [isGameBooting, setIsGameBooting] = useState<boolean>(false);
+  const [isPreloadingJ2ME, setIsPreloadingJ2ME] = useState<boolean>(false);
+  const hasPreloadedJ2MERef = useRef<boolean>(false);
   const pendingGameRef = useRef<GameItem | null>(null);
   const gameBootVideoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -142,6 +145,28 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     }
     pushState('game_screen', 'game');
   };
+
+  // Préchargement silencieux dès qu'on entre dans la colonne Jeu (libère l'iframe une fois mis en cache)
+  useEffect(() => {
+    if (hasPreloadedJ2MERef.current || isGameBooting || viewMode === 'game_screen') return;
+    const activeCat = categories[catIndex];
+    const inGameSection = activeCat?.id === 'game' || (viewMode === 'sublist' && subListType === 'game');
+    if (inGameSection && !isPreloadingJ2ME) {
+      setIsPreloadingJ2ME(true);
+    }
+  }, [catIndex, viewMode, subListType, isGameBooting, isPreloadingJ2ME]);
+
+  useEffect(() => {
+    if (!isPreloadingJ2ME) return;
+    const onPreloadMsg = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'freej2me:preloaded') {
+        hasPreloadedJ2MERef.current = true;
+        setIsPreloadingJ2ME(false);
+      }
+    };
+    window.addEventListener('message', onPreloadMsg);
+    return () => window.removeEventListener('message', onPreloadMsg);
+  }, [isPreloadingJ2ME]);
 
   // Official Themes list for custom theme picker
   const officialThemesList = Object.values(PSP_OFFICIAL_THEMES);
@@ -238,6 +263,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
   // Search modal state
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [lastSearchQuery, setLastSearchQuery] = useState<string>('');
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [isSearchModalOpen, setIsSearchModalOpen] = useState<boolean>(false);
   const [infoPopup, setInfoPopup] = useState<string | null>(null);
@@ -381,11 +407,11 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       icon: 'game',
       items: [
         {
-          id: 'game-1',
-          label: 'Mini Jeu Rétro',
-          sublabel: 'PlayStation Portable Studio • Casse-briques',
+          id: 'game-ms',
+          label: 'Memory Stick™ (Jeux)',
+          sublabel: `${gamesList.length} jeux disponibles (J2ME & Démo)`,
           icon: 'game',
-          type: 'game' as const,
+          type: 'folder',
         },
       ],
     },
@@ -395,6 +421,17 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       icon: 'search',
       items: [
         { id: 'search-itunes', label: 'Rechercher sur iTunes...', sublabel: '15 extraits officiels en streaming', icon: 'search', type: 'search' },
+        ...(searchResults.length > 0
+          ? [
+              {
+                id: 'search-last-results',
+                label: `Résultats : "${lastSearchQuery || searchQuery || 'iTunes'}"`,
+                sublabel: `${searchResults.length} extrait${searchResults.length > 1 ? 's' : ''} trouvé${searchResults.length > 1 ? 's' : ''}`,
+                icon: 'music',
+                type: 'folder' as const,
+              },
+            ]
+          : []),
         { id: 'search-daft-punk', label: 'Découvrir Daft Punk', sublabel: 'Recherche rapide en 1 clic', icon: 'music', type: 'action' },
       ],
     },
@@ -425,10 +462,14 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   useEffect(() => {
     if (currentTrack && currentSubList.length > 0) {
       const idx = currentSubList.findIndex(
-        (t) => (t.id && t.id === currentTrack.id) || t.url === currentTrack.url
+        (t) =>
+          (t.id && t.id === currentTrack.id) ||
+          (t.url && t.url === currentTrack.url) ||
+          (t.previewUrl && t.previewUrl === currentTrack.previewUrl)
       );
       if (idx >= 0) {
         setSubItemIndex(idx);
+        stateRef.current.subItemIndex = idx;
       }
     }
   }, [currentTrack, currentSubList]);
@@ -510,16 +551,16 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     nextSubListType?: 'ms' | 'itunes' | 'history' | 'search_results' | 'video' | 'game' | 'theme' | 'music'
   ) => {
     const current = stateRef.current;
-    setNavStack((prev) => [
-      ...prev,
-      {
-        view: current.viewMode,
-        catIndex: current.catIndex,
-        itemIndex: current.itemIndex,
-        subItemIndex: current.subItemIndex,
-        subListType: current.subListType,
-      },
-    ]);
+    const nextFrame: NavigationFrame = {
+      view: current.viewMode,
+      catIndex: current.catIndex,
+      itemIndex: current.itemIndex,
+      subItemIndex: current.subItemIndex,
+      subListType: current.subListType,
+    };
+    const nextStack = [...(current.navStack || []), nextFrame];
+    setNavStack(nextStack);
+    stateRef.current.navStack = nextStack;
     setViewMode(newView);
     if (nextSubListType) setSubListType(nextSubListType);
     if (newView === 'sublist') {
@@ -532,9 +573,12 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     stateRef.current.isOptionsOpen = false;
   };
 
-  // Sortie propre et synchrone du mini-jeu (Touche ◯ / Échap) (Chantier 3)
+  // Sortie propre et synchrone du jeu (libère complètement l'émulateur de la RAM)
   const handleExitGame = () => {
     try { sound.playBack(); } catch (e) {}
+    setIsGameBooting(false);
+    setCurrentGame(null);
+    pendingGameRef.current = null;
     setViewMode('menu');
     const gameCatIndex = categories.findIndex((c) => c.id === 'game');
     if (gameCatIndex !== -1) {
@@ -576,7 +620,53 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
     // Navigation déterministe
     if (currentMode === 'player') {
-      // Quitte le lecteur plein écran et revient à la sous-liste
+      // Quitte le lecteur plein écran et restaure exactement la vue/sous-liste précédente (ex. recherche iTunes)
+      const prevStack = stateRef.current.navStack || [];
+      const last = prevStack[prevStack.length - 1];
+      if (last) {
+        const nextStack = prevStack.slice(0, -1);
+        setNavStack(nextStack);
+        stateRef.current.navStack = nextStack;
+
+        if (last.view === 'menu') {
+          setCatIndex(last.catIndex);
+          setItemIndex(last.itemIndex);
+          stateRef.current.catIndex = last.catIndex;
+          stateRef.current.itemIndex = last.itemIndex;
+          setViewMode('menu');
+          stateRef.current.viewMode = 'menu';
+          return;
+        }
+
+        const targetSubType = last.subListType || stateRef.current.subListType;
+        setSubListType(targetSubType);
+        stateRef.current.subListType = targetSubType;
+
+        const targetList =
+          targetSubType === 'itunes'
+            ? itunesTracks
+            : targetSubType === 'history'
+              ? historyTracks
+              : targetSubType === 'search_results'
+                ? searchResults
+                : localTracks;
+        const active = stateRef.current.currentTrack;
+        const matchedIdx =
+          active && targetList.length > 0
+            ? targetList.findIndex(
+                (t) =>
+                  (t.id && t.id === active.id) ||
+                  (t.url && t.url === active.url) ||
+                  (t.previewUrl && t.previewUrl === active.previewUrl)
+              )
+            : -1;
+        const safeIdx =
+          matchedIdx >= 0
+            ? matchedIdx
+            : Math.min(Math.max(0, last.subItemIndex), Math.max(0, targetList.length - 1));
+        setSubItemIndex(safeIdx);
+        stateRef.current.subItemIndex = safeIdx;
+      }
       setViewMode('sublist');
       stateRef.current.viewMode = 'sublist';
     } else if (currentMode === 'video_player') {
@@ -600,6 +690,8 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       stateRef.current.viewMode = 'sublist';
     } else if (currentMode === 'sublist') {
       // Quitte la sous-liste et revient au menu racine sur la catégorie courante
+      setNavStack([]);
+      stateRef.current.navStack = [];
       setViewMode('menu');
       stateRef.current.viewMode = 'menu';
       setSubItemIndex(0);
@@ -620,6 +712,9 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       videoRef.current.load();
     }
     setIsVideoPlaying(false);
+    setIsGameBooting(false);
+    setCurrentGame(null);
+    pendingGameRef.current = null;
     setNavStack([]);
     setViewMode('menu');
     setItemIndex(0);
@@ -844,13 +939,18 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     }
   };
 
-  // Déclencheur dédié et autonome pour lancer le mini-jeu avec boot UMD (Étape 3)
+  // Déclencheur dédié pour lancer un jeu avec préchargement simultané pendant le boot UMD
   const launchRetroGame = (gameItem?: any) => {
     if (isGameBooting) return;
     try { sound.playEnter(); } catch (e) {} // Ne doit jamais bloquer l'exécution
     pauseTrack();
+    setIsPreloadingJ2ME(false);
     const targetGame = gameItem || gamesList[0] || { id: 'game-1', title: 'Mini Jeu Rétro' };
     pendingGameRef.current = targetGame;
+    if (targetGame?.engine === 'j2me') {
+      // Monte J2MEPlayer en arrière-plan dès le début de startgame.mp4
+      setCurrentGame(targetGame);
+    }
     setIsGameBooting(true);
   };
 
@@ -936,7 +1036,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       const selectedTrack = s.currentSubList[activeSubIndex];
       if (selectedTrack) {
         playTrack(selectedTrack, s.currentSubList);
-        pushState('player', 'music');
+        pushState('player');
       }
       return;
     }
@@ -957,6 +1057,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       else if (currentItem.id === 'history-list') targetType = 'history';
       else if (currentItem.id === 'video-ms') targetType = 'video';
       else if (currentItem.id === 'game-ms') targetType = 'game';
+      else if (currentItem.id === 'search-last-results') targetType = 'search_results';
       pushState('sublist', targetType);
       return;
     } else if (currentItem.id === 'game-1' || currentItem.type === 'game') {
@@ -967,7 +1068,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       setIsSearchModalOpen(true);
     } else if (currentItem.id === 'music-now') {
       if (currentTrack) {
-        pushState('player', 'music');
+        pushState('player');
       }
     } else if (currentItem.id === 'search-daft-punk') {
       executeSearch('Daft Punk');
@@ -1032,9 +1133,11 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     if (!queryText.trim()) return;
     setIsSearching(true);
     const results = await searchTracks(queryText);
+    setLastSearchQuery(queryText.trim());
     setSearchResults(results);
     setIsSearching(false);
     setIsSearchModalOpen(false);
+    stateRef.current.isSearchModalOpen = false;
     pushState('sublist', 'search_results');
   };
 
@@ -1074,6 +1177,13 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       handleSelect();
     } else if (action === 'start') {
       togglePlay();
+    } else if (action === 'music_note') {
+      if (currentTrack) {
+        togglePlay();
+      } else {
+        const fallbackList = localTracks.length > 0 ? localTracks : itunesTracks;
+        if (fallbackList.length > 0) playTrack(fallbackList[0], fallbackList);
+      }
     } else if (action === 'vol_up') {
       adjustVolume(0.05);
     } else if (action === 'vol_down') {
@@ -1090,7 +1200,15 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         // XMBMenu ne doit intercepter AUCUNE flèche, AUCUN bouton directionnel.
         return;
       }
-      if (stateRef.current.isSearchModalOpen && e.target instanceof HTMLInputElement) return;
+      if (stateRef.current.isSearchModalOpen && e.target instanceof HTMLInputElement) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          sound.playBack();
+          setIsSearchModalOpen(false);
+          stateRef.current.isSearchModalOpen = false;
+        }
+        return;
+      }
 
       const key = e.key.toLowerCase();
 
@@ -1130,6 +1248,15 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       } else if (e.key === 'Tab' || key === 'v') {
         e.preventDefault();
         handleSelect();
+      } else if (key === 'm') {
+        e.preventDefault();
+        sound.playOption();
+        if (currentTrack) {
+          togglePlay();
+        } else {
+          const fallbackList = localTracks.length > 0 ? localTracks : itunesTracks;
+          if (fallbackList.length > 0) playTrack(fallbackList[0], fallbackList);
+        }
       }
     };
 
@@ -1139,15 +1266,15 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
   return (
     <div className="relative w-full h-full select-none overflow-hidden text-white font-['Inter',sans-serif]">
-      {/* 1. TOP STATUS BAR (Masquée en mode vidéo pour supprimer tout conflit d'affichage) */}
-      {viewMode !== 'video_player' && (
+      {/* 1. TOP STATUS BAR (Masquée en mode vidéo et en jeu pour éviter tout chevauchement) */}
+      {viewMode !== 'video_player' && viewMode !== 'game_screen' && (
         <div className="absolute top-2 left-3 right-3 flex justify-between items-center z-30 text-[10px] font-medium tracking-wider text-white/80 drop-shadow">
           {/* Section gauche épurée (suppression totale des indicateurs textuels pour alléger l'UI) */}
           <div className="min-w-0" />
 
           <div className="flex items-center gap-2 sm:gap-2.5 flex-shrink-0">
             {/* Mini lecteur de musique fin et compact positionné à côté de l'heure et de la date */}
-            {currentTrack && viewMode !== 'player' && viewMode !== 'game_screen' && (
+            {currentTrack && viewMode !== 'player' && (
               <div
                 onClick={() => pushState('player')}
                 className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/15 cursor-pointer hover:bg-white/20 transition-all max-w-[110px] sm:max-w-[125px] overflow-hidden flex-shrink-0 shadow-sm"
@@ -1204,10 +1331,25 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         </div>
       )}
 
-      {/* 2. DEDICATED FULLSCREEN GAME ENGINE (RETRO BRICK BREAKER) */}
-      {viewMode === 'game_screen' ? (
-        <div className="absolute inset-0 z-20 overflow-hidden bg-black animate-fade-in">
-          <RetroBrickGame onExit={handleExitGame} externalCommand={externalCommand} />
+      {/* 2. DEDICATED FULLSCREEN GAME ENGINE (J2ME EN ARRIÈRE-PLAN PENDANT BOOT OU RETRO BRICK) */}
+      {(viewMode === 'game_screen' || (isGameBooting && currentGame?.engine === 'j2me')) ? (
+        <div
+          className={`absolute inset-0 overflow-hidden bg-black ${
+            viewMode === 'game_screen' && !isGameBooting
+              ? 'z-20 animate-fade-in'
+              : 'z-10 pointer-events-none'
+          }`}
+        >
+          {currentGame?.engine === 'j2me' ? (
+            <J2MEPlayer
+              game={currentGame}
+              onExit={handleExitGame}
+              externalCommand={externalCommand}
+              visible={viewMode === 'game_screen' && !isGameBooting}
+            />
+          ) : viewMode === 'game_screen' ? (
+            <RetroBrickGame onExit={handleExitGame} externalCommand={externalCommand} />
+          ) : null}
         </div>
       ) : viewMode === 'video_player' && currentVideo ? (
         /* 3. DEDICATED FULLSCREEN VIDEO PLAYER (LECTEUR VIDÉO MP4 PLEIN ÉCRAN) */
@@ -1553,6 +1695,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                           else if (item.id === 'history-list') targetType = 'history';
                           else if (item.id === 'video-ms') targetType = 'video';
                           else if (item.id === 'game-ms') targetType = 'game';
+                          else if (item.id === 'search-last-results') targetType = 'search_results';
                           pushState('sublist', targetType);
                         } else if (isGame) {
                           launchRetroGame(item);
@@ -1681,22 +1824,27 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                       >
                         <div className="relative w-12 h-8 rounded overflow-hidden flex-shrink-0 shadow border border-white/20 bg-gradient-to-br from-[#132219] via-[#0d1712] to-black flex items-center justify-center">
                           {isNearVisible ? (
-                            <CategoryIcon type="game" active={isSelected} />
+                            game.thumbnail ? (
+                              <img
+                                src={game.thumbnail}
+                                alt={game.title}
+                                loading="lazy"
+                                decoding="async"
+                                className="w-7 h-7 object-contain rounded-sm"
+                              />
+                            ) : (
+                              <CategoryIcon type="game" active={isSelected} />
+                            )
                           ) : (
-                            <span className="text-[7.5px] font-mono text-emerald-400/50">UMD</span>
+                            <span className="text-[7.5px] font-mono text-white/35">JEU</span>
                           )}
                         </div>
                         <div className="flex flex-col min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[11px] font-bold truncate text-white drop-shadow">
-                              {game.title}
-                            </span>
-                            <span className="text-[8px] px-1 rounded bg-emerald-500/80 text-black font-mono font-bold flex-shrink-0">
-                              UMD™
-                            </span>
-                          </div>
+                          <span className="text-[11px] font-bold truncate text-white drop-shadow">
+                            {game.title}
+                          </span>
                           <span className="text-[9px] text-white/75 truncate">
-                            {game.publisher || 'SCE'} • {game.genre || 'Arcade'} • {game.size || '14 MB'}
+                            {game.publisher || 'SCE'} • {game.genre || 'Arcade'}
                           </span>
                         </div>
                       </div>
@@ -1786,7 +1934,9 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                     <span className="text-[9px] text-white/40 mt-1 max-w-[220px]">
                       {subListType === 'ms'
                         ? 'Glisse tes fichiers MP3/M4A/WAV dans public/audio/'
-                        : 'Aucun morceau disponible.'}
+                        : subListType === 'search_results'
+                          ? 'Aucun résultat trouvé sur iTunes pour cette recherche.'
+                          : 'Aucun morceau disponible.'}
                     </span>
                   </div>
                 ) : (
@@ -2117,7 +2267,18 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
           playsInline
           onEnded={handleGameBootEnded}
           onError={handleGameBootEnded}
-          className="absolute inset-0 w-full h-full object-cover z-30 bg-white pointer-events-none"
+          className="absolute inset-0 w-full h-full object-cover z-30 bg-black pointer-events-none"
+        />
+      )}
+
+      {/* 11. PRÉCHARGEMENT SILENCIEUX FREEJ2ME-WEB (Uniquement dans la colonne Jeu) */}
+      {isPreloadingJ2ME && !isGameBooting && viewMode !== 'game_screen' && (
+        <iframe
+          src="/emulators/freej2me/run.html?preload=1"
+          title="Préchargement FreeJ2ME"
+          aria-hidden="true"
+          tabIndex={-1}
+          className="absolute -left-[9999px] top-0 w-px h-px opacity-0 border-0 pointer-events-none"
         />
       )}
     </div>

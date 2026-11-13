@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { WaveBackground } from './WaveBackground';
 import { XMBMenu } from './XMBMenu';
-import { PSPTheme, PSP_OFFICIAL_THEMES } from '../types/xmb';
+import { PSPTheme, PSP_OFFICIAL_THEMES, XMBContextInfo } from '../types/xmb';
 import { useAudio } from './AudioEngine';
 import { sound } from '../services/sound';
 import { useGamepad } from '../hooks/useGamepad';
@@ -55,8 +55,9 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
     action: string;
     timestamp: number;
   } | null>(null);
+  const [xmbContext, setXmbContext] = useState<XMBContextInfo>('xmb_menu');
 
-  const { togglePlay, showVolumeOSD, volume } = useAudio();
+  const { togglePlay, showVolumeOSD, volume, isPlaying } = useAudio();
 
   // Machine à états d'alimentation : 'off' (veille) -> 'booting' (coldboot) -> 'on' (XMB)
   const [powerState, setPowerState] = useState<'off' | 'booting' | 'on'>('off');
@@ -354,8 +355,8 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
         >
           {powerState !== 'off' ? (
             <>
-              {/* Fond dynamique sinusoïdal PSP en Canvas 2D */}
-              <WaveBackground theme={theme} />
+              {/* Fond dynamique sinusoïdal PSP en Canvas 2D (en pause pendant un jeu pour économiser CPU/GPU) */}
+              <WaveBackground theme={theme} paused={xmbContext === 'game'} />
 
               {/* Interface XMB, navigation, lecteur vidéo MP4, lecteur audio et jeux */}
               <XMBMenu
@@ -363,6 +364,7 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
                 onThemeChange={setTheme}
                 externalCommand={externalCommand}
                 debugHitboxes={debugHitboxes}
+                onContextChange={setXmbContext}
               />
 
               {/* Authentic PSP Volume OSD Overlay */}
@@ -585,6 +587,36 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
             style={getHitboxStyle({ top: '92%', left: '38.6%', width: '4.5%', height: '6%', borderRadius: '4px' })}
           />
 
+          {/* Touche Note de Musique (♪) : sérigraphie officielle PSP gris argenté, centrée entre PSP et SELECT */}
+          <button
+            onClick={() => {
+              if (powerState === 'off') return;
+              sound.playOption();
+              sendCommand('music_note');
+            }}
+            aria-label="Touche Note de Musique (Mixeur Audio / Lecture)"
+            title="Note de Musique (♪ / M)"
+            className={`absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.9] transition-all duration-150 flex items-center justify-center rounded z-30 ${
+              debugHitboxes
+                ? 'outline outline-2 outline-red-500 bg-red-500/20 text-white'
+                : powerState === 'off'
+                  ? 'text-[#c2c6ce]/80'
+                  : isPlaying
+                    ? 'text-white drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]'
+                    : 'text-[#c2c6ce]/85 hover:text-white'
+            }`}
+            style={{ top: '92.5%', left: '59.4%', width: '4.0%', height: '5.5%' }}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="w-3.5 h-3.5"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path d="M13 4v10.55A3.5 3.5 0 1 0 14.8 18V8.4l4.7 1.35V6.6L13 4z" />
+            </svg>
+          </button>
+
           {/* SELECT : change le visualiseur dans le lecteur audio ou le thème en boucle */}
           <button
             onClick={() => {
@@ -642,7 +674,7 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
         ) : (
           <div className="mt-4 px-6 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-md shadow-md">
             <p className="text-xs font-mono text-white/70 tracking-wider">
-              🎮 D-Pad / Flèches • Ⓢ Home • ✕ Valider • ◯ Retour • SELECT • START
+              🎮 D-Pad / Flèches • ♪ Musique (M) • Ⓢ Home • ✕ Valider • ◯ Retour • SELECT • START
             </p>
           </div>
         )}
