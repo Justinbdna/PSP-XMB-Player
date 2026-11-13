@@ -1,6 +1,20 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { XMBCategory, Track, VideoItem, GameItem, PSPTheme, PSP_OFFICIAL_THEMES, VisualizerMode, XMBContextInfo } from '../types/xmb';
-import { CategoryIcon, PSGlyph, PSPKeycap } from './XMBIcons';
+import {
+  XMBCategory,
+  Track,
+  VideoItem,
+  GameItem,
+  PSPTheme,
+  PSP_OFFICIAL_THEMES,
+  VisualizerMode,
+  XMBContextInfo,
+  PSPModelId,
+  PSPChassisSpec,
+  PSP_CHASSIS_CONFIG,
+  BrightnessLevel,
+  getBrightnessMeta,
+} from '../types/xmb';
+import { CategoryIcon, PSGlyph, PSPKeycap, DisplayKeycap, MusicNoteKeycap } from './XMBIcons';
 import {
   NOSTALGIC_PSP_TRACKS,
   searchTracks,
@@ -17,14 +31,47 @@ import { RetroBrickGame } from './games/RetroBrickGame';
 import { J2MEPlayer } from './games/J2MEPlayer';
 
 export type XMBViewMode = 'menu' | 'sublist' | 'player' | 'video_player' | 'game_screen';
+export type XMBSubListType =
+  | 'ms'
+  | 'itunes'
+  | 'history'
+  | 'search_results'
+  | 'video'
+  | 'game'
+  | 'theme'
+  | 'skin'
+  | 'music';
 
 interface NavigationFrame {
   view: XMBViewMode;
   catIndex: number;
   itemIndex: number;
   subItemIndex: number;
-  subListType?: 'ms' | 'itunes' | 'history' | 'search_results' | 'video' | 'game' | 'theme' | 'music';
+  subListType?: XMBSubListType;
 }
+
+const resolveFolderSubListType = (itemId: string): XMBSubListType => {
+  switch (itemId) {
+    case 'music-ms':
+      return 'ms';
+    case 'music-itunes':
+      return 'itunes';
+    case 'theme-color':
+      return 'theme';
+    case 'psp-skin':
+      return 'skin';
+    case 'history-list':
+      return 'history';
+    case 'video-ms':
+      return 'video';
+    case 'game-ms':
+      return 'game';
+    case 'search-last-results':
+      return 'search_results';
+    default:
+      return 'ms';
+  }
+};
 
 const VISUALIZER_OPTIONS: { id: VisualizerMode; label: string }[] = [
   { id: 'waveform', label: 'Neon Wave Oscilloscope' },
@@ -35,6 +82,10 @@ const VISUALIZER_OPTIONS: { id: VisualizerMode; label: string }[] = [
 interface XMBMenuProps {
   currentTheme: PSPTheme;
   onThemeChange: (theme: PSPTheme) => void;
+  currentChassis: PSPChassisSpec;
+  onModelChange: (modelId: PSPModelId) => void;
+  brightness: BrightnessLevel;
+  onCycleBrightness: () => void;
   externalCommand?: { action: string; timestamp: number } | null;
   debugHitboxes?: boolean;
   onContextChange?: (context: XMBContextInfo) => void;
@@ -47,17 +98,13 @@ const formatTime = (seconds: number): string => {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
-const MusicNoteKeycap: React.FC = () => (
-  <PSPKeycap shape="circle">
-    <svg viewBox="0 0 24 24" className="w-2 h-2" fill="currentColor" aria-hidden="true">
-      <path d="M13 4v10.55A3.5 3.5 0 1 0 14.8 18V8.4l4.7 1.35V6.6L13 4z" />
-    </svg>
-  </PSPKeycap>
-);
-
 export const XMBMenu: React.FC<XMBMenuProps> = ({
   currentTheme,
   onThemeChange,
+  currentChassis,
+  onModelChange,
+  brightness,
+  onCycleBrightness,
   externalCommand,
   debugHitboxes: _debugHitboxes = false,
   onContextChange,
@@ -109,9 +156,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   const [catIndex, setCatIndex] = useState<number>(1);
   const [itemIndex, setItemIndex] = useState<number>(0);
   const [subItemIndex, setSubItemIndex] = useState<number>(0);
-  const [subListType, setSubListType] = useState<
-    'ms' | 'itunes' | 'history' | 'search_results' | 'video' | 'game' | 'theme' | 'music'
-  >('ms');
+  const [subListType, setSubListType] = useState<XMBSubListType>('ms');
 
   // Video playback state
   const [videosList] = useState<VideoItem[]>(videosData as VideoItem[]);
@@ -176,8 +221,10 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     return () => window.removeEventListener('message', onPreloadMsg);
   }, [isPreloadingJ2ME]);
 
-  // Official Themes list for custom theme picker
+  // Official Themes & Skins lists for settings pickers
   const officialThemesList = Object.values(PSP_OFFICIAL_THEMES);
+  const availableSkins = Object.values(PSP_CHASSIS_CONFIG.models);
+  const brightnessMeta = getBrightnessMeta(brightness);
 
   // Dynamic tracks state (Chantier 2)
   const [localTracks] = useState<Track[]>(localTracksData as Track[]);
@@ -365,8 +412,10 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       icon: 'settings',
       items: [
         { id: 'theme-color', label: 'Thème & Couleurs', sublabel: currentTheme.name, icon: 'theme', type: 'folder' },
+        { id: 'psp-skin', label: 'Skin PSP', sublabel: currentChassis.shortName, icon: 'skin', type: 'folder' },
+        { id: 'display-brightness', label: 'Luminosité de l’écran', sublabel: brightnessMeta.label, icon: 'brightness', type: 'action' },
         { id: 'sound-toggle', label: 'Bip sonore des touches', sublabel: sound.getMuted() ? 'Désactivé' : 'Activé', icon: 'audio', type: 'action' },
-        { id: 'about-psp', label: 'Informations système', sublabel: 'Sony PSP Street E1000 - v6.61', icon: 'info', type: 'action' },
+        { id: 'about-psp', label: 'Informations système', sublabel: currentChassis.firmwareLabel, icon: 'info', type: 'action' },
       ],
     },
     {
@@ -500,6 +549,9 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
     gamesList,
     currentGame,
     officialThemesList,
+    availableSkins,
+    onModelChange,
+    onCycleBrightness,
     isOptionsOpen,
     optionVisualizerIndex,
     isSearchModalOpen,
@@ -526,6 +578,9 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       gamesList,
       currentGame,
       officialThemesList,
+      availableSkins,
+      onModelChange,
+      onCycleBrightness,
       isOptionsOpen,
       optionVisualizerIndex,
       isSearchModalOpen,
@@ -554,10 +609,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
   }, [viewMode, catIndex, itemIndex, subItemIndex, activeCategory, subListType]);
 
   // Push current frame onto navigation state stack
-  const pushState = (
-    newView: XMBViewMode,
-    nextSubListType?: 'ms' | 'itunes' | 'history' | 'search_results' | 'video' | 'game' | 'theme' | 'music'
-  ) => {
+  const pushState = (newView: XMBViewMode, nextSubListType?: XMBSubListType) => {
     const current = stateRef.current;
     const nextFrame: NavigationFrame = {
       view: current.viewMode,
@@ -886,16 +938,20 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
 
     // 4. AU SEIN D'UN SOUS-DOSSIER (SUBLIST)
     if (s.viewMode === 'sublist') {
+      const getSubListLength = () =>
+        s.subListType === 'game'
+          ? s.gamesList.length
+          : s.subListType === 'video'
+          ? s.videosList.length
+          : s.subListType === 'theme'
+          ? s.officialThemesList.length
+          : s.subListType === 'skin'
+          ? s.availableSkins.length
+          : s.currentSubList.length;
+
       if (dir === 'up') {
         sound.playTick();
-        const listLength =
-          s.subListType === 'game'
-            ? s.gamesList.length
-            : s.subListType === 'video'
-            ? s.videosList.length
-            : s.subListType === 'theme'
-            ? s.officialThemesList.length
-            : s.currentSubList.length;
+        const listLength = getSubListLength();
         setSubItemIndex((prev) => {
           const next = prev > 0 ? prev - 1 : Math.max(0, listLength - 1);
           stateRef.current.subItemIndex = next;
@@ -903,14 +959,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         });
       } else if (dir === 'down') {
         sound.playTick();
-        const listLength =
-          s.subListType === 'game'
-            ? s.gamesList.length
-            : s.subListType === 'video'
-            ? s.videosList.length
-            : s.subListType === 'theme'
-            ? s.officialThemesList.length
-            : s.currentSubList.length;
+        const listLength = getSubListLength();
         setSubItemIndex((prev) => {
           const next = prev < listLength - 1 ? prev + 1 : 0;
           stateRef.current.subItemIndex = next;
@@ -1023,6 +1072,16 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
         }
         return;
       }
+      if (s.subListType === 'skin') {
+        const selectedSkin = s.availableSkins[activeSubIndex];
+        if (selectedSkin) {
+          sound.playEnter();
+          s.onModelChange(selectedSkin.id);
+          setInfoPopup(`Skin appliqué : ${selectedSkin.shortName}`);
+          setTimeout(() => setInfoPopup(null), 2500);
+        }
+        return;
+      }
       if (s.subListType === 'game') {
         const selectedGame = s.gamesList[activeSubIndex] || s.gamesList[0];
         launchRetroGame(selectedGame);
@@ -1058,15 +1117,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       try { sound.playEnter(); } catch (e) {}
       setSubItemIndex(0);
       stateRef.current.subItemIndex = 0;
-      let targetType: 'ms' | 'itunes' | 'history' | 'search_results' | 'video' | 'game' | 'theme' | 'music' = 'ms';
-      if (currentItem.id === 'music-ms') targetType = 'ms';
-      else if (currentItem.id === 'music-itunes') targetType = 'itunes';
-      else if (currentItem.id === 'theme-color') targetType = 'theme';
-      else if (currentItem.id === 'history-list') targetType = 'history';
-      else if (currentItem.id === 'video-ms') targetType = 'video';
-      else if (currentItem.id === 'game-ms') targetType = 'game';
-      else if (currentItem.id === 'search-last-results') targetType = 'search_results';
-      pushState('sublist', targetType);
+      pushState('sublist', resolveFolderSubListType(currentItem.id));
       return;
     } else if (currentItem.id === 'game-1' || currentItem.type === 'game') {
       const selectedGame = s.gamesList.find((g) => g.id === currentItem.id) || s.gamesList[0] || currentItem;
@@ -1085,6 +1136,8 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
       setHistoryTracks([]);
       setInfoPopup('Historique effacé avec succès.');
       setTimeout(() => setInfoPopup(null), 2500);
+    } else if (currentItem.id === 'display-brightness') {
+      s.onCycleBrightness();
     } else if (currentItem.id === 'sound-toggle') {
       sound.toggleMute();
       setItemIndex((prev) => prev);
@@ -1593,7 +1646,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
               />
             </div>
             {/* Barre de commandes enrichie avec boutons et glyphes PlayStation officiels */}
-            <div className="flex items-center justify-center gap-1.5 text-[7.5px] text-white/70 font-medium mt-1 select-none pointer-events-none whitespace-nowrap">
+            <div className="flex items-center justify-center gap-1.5 text-[7px] text-white/70 font-medium mt-1 select-none pointer-events-none whitespace-nowrap">
               <span className="flex items-center gap-1">
                 <span className="inline-flex items-center gap-0.5">
                   <PSPKeycap shape="circle">L</PSPKeycap>
@@ -1611,16 +1664,24 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
               </span>
               <span className="flex items-center gap-1">
                 <PSPKeycap shape="pill">SELECT</PSPKeycap>
-                <span>Visualiseur</span>
+                <span>Visu.</span>
               </span>
               <span className="flex items-center gap-1">
                 <PSGlyph type="triangle" size={10} />
                 <span>Options</span>
               </span>
-              <span className="flex items-center gap-1" title="Touche Note de Musique">
-                <MusicNoteKeycap />
-                <span>Musique</span>
-              </span>
+              {currentChassis.hasPhysicalDisplayButton && (
+                <span className="flex items-center gap-1" title="Luminosité (▭ / B)">
+                  <DisplayKeycap />
+                  <span>Écran</span>
+                </span>
+              )}
+              {currentChassis.hasPhysicalMusicButton && (
+                <span className="flex items-center gap-1" title="Touche Note de Musique">
+                  <MusicNoteKeycap />
+                  <span>Musique</span>
+                </span>
+              )}
               <PSPKeycap shape="pill">START</PSPKeycap>
               <PSPKeycap shape="pill">HOME</PSPKeycap>
             </div>
@@ -1702,15 +1763,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                           try { sound.playEnter(); } catch (err) {}
                           setSubItemIndex(0);
                           stateRef.current.subItemIndex = 0;
-                          let targetType: 'ms' | 'itunes' | 'history' | 'search_results' | 'video' | 'game' | 'theme' | 'music' = 'ms';
-                          if (item.id === 'music-ms') targetType = 'ms';
-                          else if (item.id === 'music-itunes') targetType = 'itunes';
-                          else if (item.id === 'theme-color') targetType = 'theme';
-                          else if (item.id === 'history-list') targetType = 'history';
-                          else if (item.id === 'video-ms') targetType = 'video';
-                          else if (item.id === 'game-ms') targetType = 'game';
-                          else if (item.id === 'search-last-results') targetType = 'search_results';
-                          pushState('sublist', targetType);
+                          pushState('sublist', resolveFolderSubListType(item.id));
                         } else if (isGame) {
                           launchRetroGame(item);
                         } else {
@@ -1726,12 +1779,22 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                       }`}
                     >
                       <div className="w-6 h-6 rounded flex items-center justify-center bg-white/10 text-white flex-shrink-0">
-                        {item.type === 'folder' ? (
+                        {item.icon === 'skin' ? (
+                          '🎮'
+                        ) : item.type === 'folder' ? (
                           '📁'
                         ) : item.type === 'search' ? (
                           '🔍'
                         ) : item.icon === 'game' ? (
                           '🎮'
+                        ) : item.icon === 'brightness' ? (
+                          '☀️'
+                        ) : item.icon === 'audio' ? (
+                          '🔊'
+                        ) : item.icon === 'info' ? (
+                          'ℹ️'
+                        ) : item.icon === 'now' ? (
+                          '▶️'
                         ) : (
                           '🎵'
                         )}
@@ -1805,6 +1868,53 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                           </div>
                           <span className="text-[8.5px] text-white/70 font-mono">
                             Vagues dynamiques Canvas
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : subListType === 'skin' ? (
+                  availableSkins.map((skin, idx) => {
+                    const isSelected = idx === subItemIndex;
+                    const isActiveSkin = currentChassis.id === skin.id;
+                    return (
+                      <div
+                        key={skin.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSubItemIndex(idx);
+                          stateRef.current.subItemIndex = idx;
+                          onModelChange(skin.id);
+                          sound.playEnter();
+                          setInfoPopup(`Skin appliqué : ${skin.shortName}`);
+                          setTimeout(() => setInfoPopup(null), 2500);
+                        }}
+                        className={`h-12 flex items-center px-3 gap-2.5 rounded-lg cursor-pointer transition-all duration-200 ${
+                          isSelected
+                            ? 'bg-gradient-to-r from-white/30 via-white/15 to-transparent border-l-3 border-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.3)]'
+                            : 'opacity-45 hover:opacity-75'
+                        }`}
+                      >
+                        <div className="w-12 h-8 rounded overflow-hidden flex-shrink-0 shadow border border-white/25 bg-black/50 flex items-center justify-center p-0.5">
+                          <img
+                            src={skin.image}
+                            alt={skin.shortName}
+                            className="w-full h-full object-contain"
+                          />
+                        </div>
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] font-bold truncate text-white drop-shadow">
+                              {skin.shortName}
+                            </span>
+                            {isActiveSkin && (
+                              <span className="text-[8px] px-1 rounded bg-emerald-500/80 text-black font-mono font-bold flex-shrink-0">
+                                ACTIF
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[8.5px] text-white/70 font-mono truncate">
+                            {skin.description}
                           </span>
                         </div>
                       </div>
@@ -2270,10 +2380,18 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
             </span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="flex items-center gap-1">
-              <MusicNoteKeycap />
-              <span>Musique</span>
-            </span>
+            {currentChassis.hasPhysicalDisplayButton && (
+              <span className="flex items-center gap-1">
+                <DisplayKeycap />
+                <span>Luminosité</span>
+              </span>
+            )}
+            {currentChassis.hasPhysicalMusicButton && (
+              <span className="flex items-center gap-1">
+                <MusicNoteKeycap />
+                <span>Musique</span>
+              </span>
+            )}
             <span className="flex items-center gap-1">
               <PSPKeycap shape="pill">SELECT</PSPKeycap>
               <span>Thème</span>
