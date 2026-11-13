@@ -115,6 +115,23 @@ export const PSGlyph: React.FC<{ type: 'cross' | 'circle' | 'triangle' | 'square
   }
 };
 
+// Delicate outline keycap badge matching PSGlyph ring weight (border-white/25, transparent fill)
+export const PSPKeycap: React.FC<{
+  children: React.ReactNode;
+  shape?: 'pill' | 'circle';
+  className?: string;
+}> = ({ children, shape = 'pill', className = '' }) => (
+  <span
+    className={`inline-flex items-center justify-center rounded-full border border-white/25 bg-transparent text-white/80 leading-none select-none shrink-0 ${
+      shape === 'circle'
+        ? 'w-[11px] h-[11px] text-[6px] font-mono font-semibold'
+        : 'h-[11px] px-1.5 text-[6px] font-mono font-semibold tracking-wider'
+    } ${className}`}
+  >
+    {children}
+  </span>
+);
+
 // Official PlayStation brand symbol
 export const PlayStationLogo: React.FC<{ size?: number; className?: string }> = ({
   size = 22,

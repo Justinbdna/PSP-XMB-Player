@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { XMBCategory, Track, VideoItem, GameItem, PSPTheme, PSP_OFFICIAL_THEMES, VisualizerMode, XMBContextInfo } from '../types/xmb';
-import { CategoryIcon, PSGlyph } from './XMBIcons';
+import { CategoryIcon, PSGlyph, PSPKeycap } from './XMBIcons';
 import {
   NOSTALGIC_PSP_TRACKS,
   searchTracks,
@@ -48,11 +48,11 @@ const formatTime = (seconds: number): string => {
 };
 
 const MusicNoteKeycap: React.FC = () => (
-  <span className="inline-flex items-center justify-center px-1 py-0.5 rounded bg-white/15 border border-white/25 text-white/90 leading-none">
-    <svg viewBox="0 0 24 24" className="w-2.5 h-2.5" fill="currentColor" aria-hidden="true">
+  <PSPKeycap shape="circle">
+    <svg viewBox="0 0 24 24" className="w-2 h-2" fill="currentColor" aria-hidden="true">
       <path d="M13 4v10.55A3.5 3.5 0 1 0 14.8 18V8.4l4.7 1.35V6.6L13 4z" />
     </svg>
-  </span>
+  </PSPKeycap>
 );
 
 export const XMBMenu: React.FC<XMBMenuProps> = ({
@@ -1595,9 +1595,9 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
             {/* Barre de commandes enrichie avec boutons et glyphes PlayStation officiels */}
             <div className="flex items-center justify-center gap-1.5 text-[7.5px] text-white/70 font-medium mt-1 select-none pointer-events-none whitespace-nowrap">
               <span className="flex items-center gap-1">
-                <span className="inline-flex gap-0.5">
-                  <span className="px-1 py-0.5 rounded bg-white/15 border border-white/25 text-[6.5px] font-mono font-bold text-white/90 leading-none">L</span>
-                  <span className="px-1 py-0.5 rounded bg-white/15 border border-white/25 text-[6.5px] font-mono font-bold text-white/90 leading-none">R</span>
+                <span className="inline-flex items-center gap-0.5">
+                  <PSPKeycap shape="circle">L</PSPKeycap>
+                  <PSPKeycap shape="circle">R</PSPKeycap>
                 </span>
                 <span>Préc. / Suiv.</span>
               </span>
@@ -1610,7 +1610,7 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                 <span>Retour</span>
               </span>
               <span className="flex items-center gap-1">
-                <span className="px-1 py-0.5 rounded bg-white/15 border border-white/25 text-[6.5px] font-mono font-bold text-white/90 leading-none">SELECT</span>
+                <PSPKeycap shape="pill">SELECT</PSPKeycap>
                 <span>Visualiseur</span>
               </span>
               <span className="flex items-center gap-1">
@@ -1621,8 +1621,8 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
                 <MusicNoteKeycap />
                 <span>Musique</span>
               </span>
-              <span className="px-1 py-0.5 rounded bg-white/15 border border-white/25 text-[6.5px] font-mono font-bold text-white/90 leading-none">START</span>
-              <span className="px-1 py-0.5 rounded bg-white/15 border border-white/25 text-[6.5px] font-mono font-bold text-white/90 leading-none">HOME</span>
+              <PSPKeycap shape="pill">START</PSPKeycap>
+              <PSPKeycap shape="pill">HOME</PSPKeycap>
             </div>
           </div>
         </div>
@@ -2275,11 +2275,11 @@ export const XMBMenu: React.FC<XMBMenuProps> = ({
               <span>Musique</span>
             </span>
             <span className="flex items-center gap-1">
-              <span className="px-1 py-0.5 rounded bg-white/15 border border-white/25 text-[6.5px] font-mono font-bold text-white/90 leading-none">SELECT</span>
+              <PSPKeycap shape="pill">SELECT</PSPKeycap>
               <span>Thème</span>
             </span>
-            <span className="px-1 py-0.5 rounded bg-white/15 border border-white/25 text-[6.5px] font-mono font-bold text-white/90 leading-none">START</span>
-            <span className="px-1 py-0.5 rounded bg-white/15 border border-white/25 text-[6.5px] font-mono font-bold text-white/90 leading-none">HOME</span>
+            <PSPKeycap shape="pill">START</PSPKeycap>
+            <PSPKeycap shape="pill">HOME</PSPKeycap>
           </div>
         </div>
       )}

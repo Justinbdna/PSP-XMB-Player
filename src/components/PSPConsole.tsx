@@ -109,7 +109,8 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [powerState, handlePowerOn, skipBoot]);
 
-  // Chantier 1 : Détection mode portrait (Rotate Guard) et auto-scale dézoomé de 10%
+  // Chantier 1 : Détection mode portrait (Rotate Guard) et auto-scale adaptatif safe-area / Dynamic Island
+  const safeAreaProbeRef = useRef<HTMLDivElement | null>(null);
   const [scale, setScale] = useState<number>(1);
   const [isPortrait, setIsPortrait] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -124,13 +125,27 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
       const vw = window.visualViewport ? window.visualViewport.width : window.innerWidth;
       const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
 
+      // Lecture des marges matérielles réelles (Dynamic Island / encoche / indicateur Home iOS)
+      let safeTop = 0;
+      let safeRight = 0;
+      let safeBottom = 0;
+      let safeLeft = 0;
+      if (safeAreaProbeRef.current) {
+        const cs = window.getComputedStyle(safeAreaProbeRef.current);
+        safeTop = parseFloat(cs.paddingTop) || 0;
+        safeRight = parseFloat(cs.paddingRight) || 0;
+        safeBottom = parseFloat(cs.paddingBottom) || 0;
+        safeLeft = parseFloat(cs.paddingLeft) || 0;
+      }
+
       // Détection mode portrait (Rotate Guard sous 950px)
       const portrait = vw <= 950 && vh > vw;
       setIsPortrait(portrait);
 
-      // Utilisation maximale de la zone disponible
-      const paddingX = 20;
-      const paddingY = 4; // Bord à bord vertical strict
+      const hasHorizontalCutout = safeLeft > 0 || safeRight > 0;
+      const symmetricCutoutX = Math.max(0, Math.max(safeLeft, safeRight) - 10) * 2;
+      const paddingX = hasHorizontalCutout ? Math.max(20, symmetricCutoutX) : vw <= 960 ? 16 : 20;
+      const paddingY = Math.max(4, safeTop + safeBottom);
 
       const targetWidth = 940;
       const targetHeight = powerState === 'off' ? 460 : 405;
@@ -141,8 +156,9 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
       const scaleX = availableWidth / targetWidth;
       const scaleY = availableHeight / targetHeight;
 
-      // Dézoom de 10% pour un cadrage équilibré
-      const computedScale = Math.min(scaleX, scaleY) * 0.90;
+      // Marge équilibrée : préserve le dégagement devant la Dynamic Island (~48pt), légèrement plus large ailleurs
+      const fillFactor = hasHorizontalCutout ? 0.995 : vw <= 960 || vh <= 500 ? 0.92 : 0.93;
+      const computedScale = Math.min(scaleX, scaleY) * fillFactor;
 
       setScale(Math.max(0.30, computedScale));
     };
@@ -263,7 +279,19 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
   });
 
   return (
-    <div className="w-full h-full min-h-screen bg-[#08090c] flex flex-col items-center justify-center p-4 select-none overflow-hidden font-['Inter',sans-serif]">
+    <div className="w-full h-full min-h-screen bg-[#08090c] flex flex-col items-center justify-center p-2 sm:p-4 select-none overflow-hidden font-['Inter',sans-serif]">
+      {/* Probe invisible pour mesurer env(safe-area-inset-*) en pixels CSS */}
+      <div
+        ref={safeAreaProbeRef}
+        aria-hidden="true"
+        className="fixed top-0 left-0 w-0 h-0 pointer-events-none opacity-0"
+        style={{
+          paddingTop: 'env(safe-area-inset-top, 0px)',
+          paddingRight: 'env(safe-area-inset-right, 0px)',
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+          paddingLeft: 'env(safe-area-inset-left, 0px)',
+        }}
+      />
       {/* Background ambient lighting */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(40,55,75,0.18),rgba(0,0,0,0.96))] pointer-events-none"></div>
 
