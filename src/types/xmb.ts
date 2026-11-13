@@ -1,5 +1,154 @@
 export type VisualizerMode = 'bubbles' | 'matrix' | 'waveform';
 
+export type PSPModelId = 'psp-2000-silver' | 'psp-street-e1000-black';
+
+export const BRIGHTNESS_LEVELS = [100, 80, 60, 40, 20] as const;
+export type BrightnessLevel = (typeof BRIGHTNESS_LEVELS)[number];
+
+export const getBrightnessMeta = (level: BrightnessLevel) => {
+  const index = BRIGHTNESS_LEVELS.indexOf(level);
+  const step = index >= 0 ? BRIGHTNESS_LEVELS.length - index : 5;
+  const isNight = level === 20;
+  return {
+    step,
+    total: BRIGHTNESS_LEVELS.length,
+    percent: level,
+    isNight,
+    dimOpacity:
+      level === 100 ? 0 : level === 80 ? 0.18 : level === 60 ? 0.36 : level === 40 ? 0.55 : 0.76,
+    label: isNight
+      ? `Niveau ${step}/${BRIGHTNESS_LEVELS.length} — ${level}% (Mode Nuit)`
+      : `Niveau ${step}/${BRIGHTNESS_LEVELS.length} — ${level}%`,
+  };
+};
+
+export interface PSPHotspotRect {
+  top: string;
+  left: string;
+  width: string;
+  height?: string;
+  aspectRatio?: string;
+  borderRadius?: string;
+  isCircle?: boolean;
+}
+
+export interface PSPChassisSpec {
+  id: PSPModelId;
+  name: string;
+  shortName: string;
+  firmwareLabel: string;
+  description: string;
+  image: string;
+  imageWidth: number;
+  imageHeight: number;
+  aspectRatio: number;
+  hasPhysicalMusicButton: boolean;
+  hasPhysicalDisplayButton: boolean;
+  powerLed?: {
+    top: string;
+    left: string;
+  };
+  screen: {
+    left: string;
+    top: string;
+    width: string;
+    height: string;
+  };
+  hotspots: {
+    triggerL: PSPHotspotRect;
+    triggerR: PSPHotspotRect;
+    dpadUp: PSPHotspotRect;
+    dpadDown: PSPHotspotRect;
+    dpadLeft: PSPHotspotRect;
+    dpadRight: PSPHotspotRect;
+    triangle: PSPHotspotRect;
+    cross: PSPHotspotRect;
+    square: PSPHotspotRect;
+    circle: PSPHotspotRect;
+    home: PSPHotspotRect;
+    volDown: PSPHotspotRect;
+    volUp: PSPHotspotRect;
+    display?: PSPHotspotRect;
+    musicNote?: PSPHotspotRect;
+    select: PSPHotspotRect;
+    start: PSPHotspotRect;
+  };
+}
+
+export const PSP_CHASSIS_CONFIG: {
+  activeModel: PSPModelId;
+  models: Record<PSPModelId, PSPChassisSpec>;
+} = {
+  activeModel: 'psp-2000-silver',
+  models: {
+    'psp-2000-silver': {
+      id: 'psp-2000-silver',
+      name: 'Sony PSP-2000 Silver',
+      shortName: 'PSP-2000 Silver',
+      firmwareLabel: 'Sony PSP-2000 Silver - v6.61',
+      description: 'Châssis argenté • LED Power • Luminosité & ♪',
+      image: '/psp-2000-silver.png',
+      imageWidth: 1024,
+      imageHeight: 444,
+      aspectRatio: 1024 / 444,
+      hasPhysicalMusicButton: true,
+      hasPhysicalDisplayButton: true,
+      powerLed: { top: '67.80%', left: '96.10%' },
+      screen: { left: '21.5%', top: '9.9%', width: '56.5%', height: '74.6%' },
+      hotspots: {
+        triggerL: { top: '3.8%', left: '8.5%', width: '14%', height: '7%', borderRadius: '4px' },
+        triggerR: { top: '3.8%', left: '91.5%', width: '14%', height: '7%', borderRadius: '4px' },
+        dpadUp: { top: '33.8%', left: '11.7%', width: '5.2%', aspectRatio: '1 / 1', borderRadius: '6px' },
+        dpadDown: { top: '56.0%', left: '11.7%', width: '5.2%', aspectRatio: '1 / 1', borderRadius: '6px' },
+        dpadLeft: { top: '44.8%', left: '6.7%', width: '5.2%', aspectRatio: '1 / 1', borderRadius: '6px' },
+        dpadRight: { top: '44.8%', left: '16.7%', width: '5.2%', aspectRatio: '1 / 1', borderRadius: '6px' },
+        triangle: { top: '31.8%', left: '88.4%', width: '5.8%', isCircle: true },
+        cross: { top: '58.2%', left: '88.4%', width: '5.8%', isCircle: true },
+        square: { top: '45.0%', left: '82.6%', width: '5.8%', isCircle: true },
+        circle: { top: '45.0%', left: '94.3%', width: '5.8%', isCircle: true },
+        home: { top: '91.2%', left: '22.1%', width: '5.6%', height: '6.2%', borderRadius: '9999px' },
+        volDown: { top: '91.2%', left: '29.2%', width: '3.6%', height: '6.0%', borderRadius: '9999px' },
+        volUp: { top: '91.2%', left: '36.1%', width: '3.6%', height: '6.0%', borderRadius: '9999px' },
+        display: { top: '91.2%', left: '60.5%', width: '4.0%', height: '6.0%', borderRadius: '9999px' },
+        musicNote: { top: '91.2%', left: '64.9%', width: '4.0%', height: '6.0%', borderRadius: '9999px' },
+        select: { top: '91.2%', left: '71.0%', width: '5.6%', height: '6.2%', borderRadius: '9999px' },
+        start: { top: '91.2%', left: '77.3%', width: '5.6%', height: '6.2%', borderRadius: '9999px' },
+      },
+    },
+    'psp-street-e1000-black': {
+      id: 'psp-street-e1000-black',
+      name: 'Sony PSP Street (E1000) Noir Mat',
+      shortName: 'PSP Street (E1000)',
+      firmwareLabel: 'Sony PSP Street E1000 - v6.61',
+      description: 'Châssis noir mat • Design épuré original',
+      image: '/psp-street-e1000.png',
+      imageWidth: 1024,
+      imageHeight: 433,
+      aspectRatio: 1024 / 433,
+      hasPhysicalMusicButton: false,
+      hasPhysicalDisplayButton: false,
+      screen: { left: '21.6%', top: '7.5%', width: '56.8%', height: '77.2%' },
+      hotspots: {
+        triggerL: { top: '3.5%', left: '8.5%', width: '14%', height: '7%', borderRadius: '4px' },
+        triggerR: { top: '3.5%', left: '91.5%', width: '14%', height: '7%', borderRadius: '4px' },
+        dpadUp: { top: '32.5%', left: '11.2%', width: '4.8%', aspectRatio: '1 / 1', borderRadius: '6px' },
+        dpadDown: { top: '55.5%', left: '11.2%', width: '4.8%', aspectRatio: '1 / 1', borderRadius: '6px' },
+        dpadLeft: { top: '44.0%', left: '6.2%', width: '4.8%', aspectRatio: '1 / 1', borderRadius: '6px' },
+        dpadRight: { top: '44.0%', left: '16.2%', width: '4.8%', aspectRatio: '1 / 1', borderRadius: '6px' },
+        triangle: { top: '29.5%', left: '89.5%', width: '5.6%', isCircle: true },
+        cross: { top: '58.5%', left: '89.5%', width: '5.6%', isCircle: true },
+        square: { top: '44.0%', left: '83.5%', width: '5.6%', isCircle: true },
+        circle: { top: '44.0%', left: '95.5%', width: '5.6%', isCircle: true },
+        home: { top: '92.6%', left: '24.8%', width: '4.8%', height: '5.5%', borderRadius: '4px' },
+        volDown: { top: '92%', left: '31.0%', width: '4.5%', height: '6%', borderRadius: '4px' },
+        volUp: { top: '92%', left: '38.6%', width: '4.5%', height: '6%', borderRadius: '4px' },
+        select: { top: '92%', left: '66.5%', width: '6%', height: '6%', borderRadius: '4px' },
+        start: { top: '92%', left: '74.5%', width: '6%', height: '6%', borderRadius: '4px' },
+      },
+    },
+  },
+};
+
 export type XMBContextInfo =
   | 'xmb_menu'
   | 'music_sublist'

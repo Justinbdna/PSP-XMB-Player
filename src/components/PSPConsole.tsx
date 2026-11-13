@@ -1,23 +1,22 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { WaveBackground } from './WaveBackground';
 import { XMBMenu } from './XMBMenu';
-import { PSPTheme, PSP_OFFICIAL_THEMES, XMBContextInfo } from '../types/xmb';
+import {
+  PSPTheme,
+  PSP_OFFICIAL_THEMES,
+  XMBContextInfo,
+  PSPModelId,
+  PSP_CHASSIS_CONFIG,
+  PSPHotspotRect,
+  BRIGHTNESS_LEVELS,
+  BrightnessLevel,
+  getBrightnessMeta,
+} from '../types/xmb';
 import { useAudio } from './AudioEngine';
 import { sound } from '../services/sound';
 import { useGamepad } from '../hooks/useGamepad';
 
-// Chassis Configuration allowing easy switching between models/colors later
-export const PSP_CHASSIS_CONFIG = {
-  activeModel: 'psp-street-e1000-black',
-  models: {
-    'psp-street-e1000-black': {
-      id: 'psp-street-e1000-black',
-      name: 'Sony PSP Street (E1000) Noir Mat',
-      image: '/psp-street-e1000.png',
-      aspectRatio: 1024 / 433, // ~2.36:1
-    },
-  },
-};
+export { PSP_CHASSIS_CONFIG };
 
 export interface PSPConsoleProps {
   debugHitboxes?: boolean;
@@ -51,18 +50,81 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
     }
   }, []);
 
+  const getInitialModelId = (): PSPModelId => {
+    try {
+      const saved = localStorage.getItem('psp_console_model');
+      if (saved === 'psp-2000-silver' || saved === 'psp-street-e1000-black') {
+        return saved;
+      }
+    } catch {
+      // Ignorer erreur localStorage
+    }
+    return PSP_CHASSIS_CONFIG.activeModel;
+  };
+
+  const [modelId, setModelId] = useState<PSPModelId>(getInitialModelId);
+  const activeChassis = PSP_CHASSIS_CONFIG.models[modelId];
+
+  const handleModelChange = useCallback((nextModelId: PSPModelId) => {
+    setModelId(nextModelId);
+    try {
+      localStorage.setItem('psp_console_model', nextModelId);
+    } catch (e) {
+      console.warn('Erreur de persistance du modèle PSP:', e);
+    }
+  }, []);
+
+  const getInitialBrightness = (): BrightnessLevel => {
+    try {
+      const saved = Number(localStorage.getItem('psp_screen_brightness'));
+      if ((BRIGHTNESS_LEVELS as readonly number[]).includes(saved)) {
+        return saved as BrightnessLevel;
+      }
+    } catch {
+      // Ignorer erreur localStorage
+    }
+    return 100;
+  };
+
+  const [brightness, setBrightness] = useState<BrightnessLevel>(getInitialBrightness);
+  const [showBrightnessOSD, setShowBrightnessOSD] = useState<boolean>(false);
+  const brightnessTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const brightnessMeta = getBrightnessMeta(brightness);
+
   const [externalCommand, setExternalCommand] = useState<{
     action: string;
     timestamp: number;
   } | null>(null);
   const [xmbContext, setXmbContext] = useState<XMBContextInfo>('xmb_menu');
 
-  const { togglePlay, showVolumeOSD, volume, isPlaying } = useAudio();
+  const { togglePlay, showVolumeOSD, volume } = useAudio();
 
   // Machine à états d'alimentation : 'off' (veille) -> 'booting' (coldboot) -> 'on' (XMB)
   const [powerState, setPowerState] = useState<'off' | 'booting' | 'on'>('off');
   const [isBootFading, setIsBootFading] = useState<boolean>(false);
   const coldBootVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  const cycleBrightness = useCallback(() => {
+    if (powerState === 'off') return;
+    sound.playTick();
+    setBrightness((prev) => {
+      const idx = BRIGHTNESS_LEVELS.indexOf(prev);
+      const next = BRIGHTNESS_LEVELS[(idx + 1) % BRIGHTNESS_LEVELS.length];
+      try {
+        localStorage.setItem('psp_screen_brightness', String(next));
+      } catch {}
+      return next;
+    });
+    setShowBrightnessOSD(true);
+    if (brightnessTimerRef.current) clearTimeout(brightnessTimerRef.current);
+    brightnessTimerRef.current = setTimeout(() => setShowBrightnessOSD(false), 2200);
+  }, [powerState]);
+
+  useEffect(() => {
+    return () => {
+      if (brightnessTimerRef.current) clearTimeout(brightnessTimerRef.current);
+    };
+  }, []);
 
   const handlePowerOn = useCallback(() => {
     setPowerState((prev) => {
@@ -99,15 +161,24 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (powerState === 'off' && (e.key === 'Home' || e.key === 'h' || e.key === 'H')) {
+      const target = e.target as HTMLElement | null;
+      const isEditable =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        Boolean(target?.isContentEditable);
+
+      if (powerState === 'off' && !isEditable && (e.key === 'Home' || e.key === 'h' || e.key === 'H')) {
         handlePowerOn();
-      } else if (powerState === 'booting' && (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape')) {
+      } else if (powerState === 'booting' && !isEditable && (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape')) {
         skipBoot();
+      } else if (powerState !== 'off' && !isEditable && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        cycleBrightness();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [powerState, handlePowerOn, skipBoot]);
+  }, [powerState, handlePowerOn, skipBoot, cycleBrightness]);
 
   // Chantier 1 : Détection mode portrait (Rotate Guard) et auto-scale adaptatif safe-area / Dynamic Island
   const safeAreaProbeRef = useRef<HTMLDivElement | null>(null);
@@ -148,7 +219,8 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
       const paddingY = Math.max(4, safeTop + safeBottom);
 
       const targetWidth = 940;
-      const targetHeight = powerState === 'off' ? 460 : 405;
+      const chassisHeightAtBase = Math.round(targetWidth * (activeChassis.imageHeight / activeChassis.imageWidth));
+      const targetHeight = powerState === 'off' ? chassisHeightAtBase + 62 : chassisHeightAtBase + 8;
 
       const availableWidth = Math.max(300, vw - paddingX);
       const availableHeight = Math.max(200, vh - paddingY);
@@ -181,7 +253,7 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
       window.removeEventListener('resize', updateScale);
       window.removeEventListener('orientationchange', updateScale);
     };
-  }, [powerState]);
+  }, [powerState, activeChassis.id, activeChassis.imageWidth, activeChassis.imageHeight]);
 
   // Send command to XMB screen without losing focus
   const sendCommand = useCallback((action: string) => {
@@ -259,24 +331,26 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
     },
   });
 
-  const activeChassis = PSP_CHASSIS_CONFIG.models['psp-street-e1000-black'];
-
   // Helper styling for debug hitboxes with 1:1 circular ratio
-  const getHitboxStyle = (pos: React.CSSProperties, isCircle = false): React.CSSProperties => ({
-    ...pos,
-    borderRadius: isCircle ? '50%' : (pos.borderRadius || '4px'),
-    aspectRatio: (isCircle || pos.aspectRatio) ? (pos.aspectRatio || '1 / 1') : undefined,
-    ...(debugHitboxes
-      ? {
-          outline: '2px solid rgba(255, 0, 0, 0.7)',
-          backgroundColor: 'rgba(255, 0, 0, 0.2)',
-          opacity: 1,
-          zIndex: 50,
-        }
-      : {
-          opacity: 0,
-        }),
-  });
+  const getHitboxStyle = (pos: PSPHotspotRect, forceCircle = false): React.CSSProperties => {
+    const { isCircle: rectCircle, ...cssProps } = pos;
+    const circleMode = forceCircle || Boolean(rectCircle);
+    return {
+      ...cssProps,
+      borderRadius: circleMode ? '50%' : (cssProps.borderRadius || '4px'),
+      aspectRatio: (circleMode || cssProps.aspectRatio) ? (cssProps.aspectRatio || '1 / 1') : undefined,
+      ...(debugHitboxes
+        ? {
+            outline: '2px solid rgba(255, 0, 0, 0.7)',
+            backgroundColor: 'rgba(255, 0, 0, 0.2)',
+            opacity: 1,
+            zIndex: 50,
+          }
+        : {
+            opacity: 0,
+          }),
+    };
+  };
 
   return (
     <div className="w-full h-full min-h-screen bg-[#08090c] flex flex-col items-center justify-center p-2 sm:p-4 select-none overflow-hidden font-['Inter',sans-serif]">
@@ -331,27 +405,27 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
       )}
 
       {/* ========================================================
-          1. CONTENEUR GLOBAL AU RATIO FIXE DE LA CONSOLE (~2.36:1)
-          Mécanique d'Architecture Calque Style Apple Music 404
+          1. CONTENEUR GLOBAL AU RATIO DU CHÂSSIS ACTIF
           ======================================================== */}
       <div
         className="relative flex items-center justify-center transition-transform duration-200 flex-shrink-0"
         style={{
           width: `${940 * scale}px`,
-          height: `${(940 * 433 / 1024) * scale}px`,
+          height: `${(940 * activeChassis.imageHeight / activeChassis.imageWidth) * scale}px`,
         }}
       >
         <div
-          className="relative z-10 w-[940px] max-w-none aspect-[1024/433] select-none flex items-center justify-center drop-shadow-[0_35px_50px_rgba(0,0,0,0.95)] flex-shrink-0"
+          className="relative z-10 w-[940px] max-w-none select-none flex items-center justify-center drop-shadow-[0_35px_50px_rgba(0,0,0,0.95)] flex-shrink-0"
           onContextMenu={(e) => e.preventDefault()}
           style={{
+            aspectRatio: `${activeChassis.imageWidth} / ${activeChassis.imageHeight}`,
             '--psp-chassis-url': `url(${activeChassis.image})`,
             transform: `scale(${scale})`,
             transformOrigin: 'center center',
           } as React.CSSProperties}
         >
         {/* ========================================================
-            CALQUE 1 — FOND : BOÎTIER PSP STREET E1000 VERROUILLÉ
+            CALQUE 1 — FOND : BOÎTIER PSP ACTIF VERROUILLÉ
             (Non sélectionnable, non déplaçable, non téléchargeable)
             ======================================================== */}
         <img
@@ -365,18 +439,37 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
           draggable={false}
         />
 
+        {/* Voyant LED POWER vert (flanc droit PSP-2000) */}
+        {activeChassis.powerLed && (
+          <div
+            aria-hidden="true"
+            className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none z-10 flex items-center justify-center"
+            style={{ top: activeChassis.powerLed.top, left: activeChassis.powerLed.left }}
+          >
+            {powerState !== 'off' ? (
+              <span
+                className={`w-[7px] h-[7px] rounded-full bg-emerald-400 shadow-[0_0_8px_3px_rgba(52,211,153,0.95),0_0_18px_6px_rgba(16,185,129,0.55)] transition-opacity duration-300 ${
+                  powerState === 'booting' ? 'animate-pulse' : ''
+                }`}
+              />
+            ) : (
+              <span className="w-[6px] h-[6px] rounded-full bg-[#14201b]/70" />
+            )}
+          </div>
+        )}
+
         {/* ========================================================
             CALQUE 2 — VIEWPORT ÉCRAN LCD (#psp-screen)
-            Coordonnées exactes : left 21.6% | top 7.5% | width 56.8% | height 77.2%
+            Coordonnées calibrées dynamiquement selon le modèle actif
             ======================================================== */}
         <div
           id="psp-screen"
           className="absolute z-10 overflow-hidden bg-black"
           style={{
-            left: '21.6%',
-            top: '7.5%',
-            width: '56.8%',
-            height: '77.2%',
+            left: activeChassis.screen.left,
+            top: activeChassis.screen.top,
+            width: activeChassis.screen.width,
+            height: activeChassis.screen.height,
             borderRadius: '4px',
             boxShadow: 'inset 0 0 20px rgba(0,0,0,0.95)',
           }}
@@ -390,10 +483,23 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
               <XMBMenu
                 currentTheme={theme}
                 onThemeChange={setTheme}
+                currentChassis={activeChassis}
+                onModelChange={handleModelChange}
+                brightness={brightness}
+                onCycleBrightness={cycleBrightness}
                 externalCommand={externalCommand}
                 debugHitboxes={debugHitboxes}
                 onContextChange={setXmbContext}
               />
+
+              {/* Voile d'assombrissement écran (5 paliers : 100% -> 20% Nuit) */}
+              {brightnessMeta.dimOpacity > 0 && (
+                <div
+                  aria-hidden="true"
+                  className="absolute inset-0 z-40 bg-black pointer-events-none transition-opacity duration-200"
+                  style={{ opacity: brightnessMeta.dimOpacity }}
+                />
+              )}
 
               {/* Authentic PSP Volume OSD Overlay */}
               {showVolumeOSD && (
@@ -416,6 +522,40 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
                   </div>
                   <span className="text-[10px] font-mono font-bold text-white/90 min-w-[20px] text-right">
                     {Math.round(volume * 30)}
+                  </span>
+                </div>
+              )}
+
+              {/* OSD Luminosité à 5 paliers */}
+              {showBrightnessOSD && (
+                <div
+                  className={`absolute left-1/2 -translate-x-1/2 z-50 bg-[#121620]/95 backdrop-blur-md border border-white/25 rounded-md px-3.5 py-1.5 flex items-center gap-2.5 shadow-2xl animate-fade-in pointer-events-none transition-all ${
+                    showVolumeOSD ? 'bottom-14' : 'bottom-5'
+                  }`}
+                >
+                  <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-amber-300 shrink-0" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="4" />
+                    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+                  </svg>
+                  <div className="flex gap-1 items-center">
+                    {Array.from({ length: BRIGHTNESS_LEVELS.length }).map((_, i) => {
+                      const filled = i < brightnessMeta.step;
+                      return (
+                        <div
+                          key={i}
+                          className={`w-3 h-2.5 rounded-[2px] transition-colors ${
+                            filled
+                              ? brightnessMeta.isNight
+                                ? 'bg-indigo-400 shadow-[0_0_5px_#818cf8]'
+                                : 'bg-amber-300 shadow-[0_0_5px_#fcd34d]'
+                              : 'bg-white/15'
+                          }`}
+                        />
+                      );
+                    })}
+                  </div>
+                  <span className="text-[10px] font-mono font-bold text-white/90 whitespace-nowrap">
+                    {brightnessMeta.isNight ? `${brightness}% Nuit` : `${brightness}%`}
                   </span>
                 </div>
               )}
@@ -452,12 +592,10 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
         </div>
 
         {/* ========================================================
-            CALQUE 3 — COMMANDES / HOTSPOTS INVISIBLES
-            (Recalibrage chirurgical au centre d'ancrage transform -50%, -50%)
+            CALQUE 3 — COMMANDES / HOTSPOTS INVISIBLES PAR MODÈLE
             ======================================================== */}
         <div className="absolute inset-0 z-20 pointer-events-none">
           {/* ----- 1. GÂCHETTES SUPÉRIEURES (L & R TRIGGERS) ----- */}
-          {/* Gâchette L (Gauche) : (8.5%, 3.5%) */}
           <button
             onClick={() => {
               sound.playTick();
@@ -465,10 +603,8 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
             }}
             aria-label="Gâchette L (Précédent / Catégorie Gauche)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.94] transition-transform duration-75"
-            style={getHitboxStyle({ top: '3.5%', left: '8.5%', width: '14%', height: '7%', borderRadius: '4px' })}
+            style={getHitboxStyle(activeChassis.hotspots.triggerL)}
           />
-
-          {/* Gâchette R (Droite) : (91.5%, 3.5%) */}
           <button
             onClick={() => {
               sound.playTick();
@@ -476,11 +612,10 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
             }}
             aria-label="Gâchette R (Suivant / Catégorie Droite)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.94] transition-transform duration-75"
-            style={getHitboxStyle({ top: '3.5%', left: '91.5%', width: '14%', height: '7%', borderRadius: '4px' })}
+            style={getHitboxStyle(activeChassis.hotspots.triggerR)}
           />
 
-          {/* ----- 2. D-PAD (CROIX DIRECTIONNELLE GAUCHE) - Centre à (11.2%, 44%) ----- */}
-          {/* Haut : left 11.2%, top 32.5%, width 4.8%, aspect-ratio 1 / 1, border-radius 6px */}
+          {/* ----- 2. D-PAD (CROIX DIRECTIONNELLE GAUCHE) ----- */}
           <button
             onClick={() => {
               sound.playTick();
@@ -488,10 +623,8 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
             }}
             aria-label="D-Pad Haut"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
-            style={getHitboxStyle({ top: '32.5%', left: '11.2%', width: '4.8%', aspectRatio: '1 / 1', borderRadius: '6px' })}
+            style={getHitboxStyle(activeChassis.hotspots.dpadUp)}
           />
-
-          {/* Bas : left 11.2%, top 55.5%, width 4.8%, aspect-ratio 1 / 1, border-radius 6px */}
           <button
             onClick={() => {
               sound.playTick();
@@ -499,10 +632,8 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
             }}
             aria-label="D-Pad Bas"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
-            style={getHitboxStyle({ top: '55.5%', left: '11.2%', width: '4.8%', aspectRatio: '1 / 1', borderRadius: '6px' })}
+            style={getHitboxStyle(activeChassis.hotspots.dpadDown)}
           />
-
-          {/* Gauche : left 6.2%, top 44.0%, width 4.8%, aspect-ratio 1 / 1, border-radius 6px */}
           <button
             onClick={() => {
               sound.playTick();
@@ -510,10 +641,8 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
             }}
             aria-label="D-Pad Gauche"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
-            style={getHitboxStyle({ top: '44.0%', left: '6.2%', width: '4.8%', aspectRatio: '1 / 1', borderRadius: '6px' })}
+            style={getHitboxStyle(activeChassis.hotspots.dpadLeft)}
           />
-
-          {/* Droite : left 16.2%, top 44.0%, width 4.8%, aspect-ratio 1 / 1, border-radius 6px */}
           <button
             onClick={() => {
               sound.playTick();
@@ -521,11 +650,10 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
             }}
             aria-label="D-Pad Droite"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
-            style={getHitboxStyle({ top: '44.0%', left: '16.2%', width: '4.8%', aspectRatio: '1 / 1', borderRadius: '6px' })}
+            style={getHitboxStyle(activeChassis.hotspots.dpadRight)}
           />
 
-          {/* ----- 3. BOUTONS D'ACTION (CLUSTER DROIT : △, ◯, ✕, ▢) - Centre à (89.5%, 44%) ----- */}
-          {/* Triangle (△ - Haut) : left 89.5%, top 29.5%, width 5.6%, cercle parfait */}
+          {/* ----- 3. BOUTONS D'ACTION (△, ◯, ✕, ▢) ----- */}
           <button
             onClick={() => {
               sound.playOption();
@@ -533,10 +661,8 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
             }}
             aria-label="Triangle (Options contextuelles)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
-            style={getHitboxStyle({ top: '29.5%', left: '89.5%', width: '5.6%' }, true)}
+            style={getHitboxStyle(activeChassis.hotspots.triangle, true)}
           />
-
-          {/* Croix (✕ - Bas) : left 89.5%, top 58.5%, width 5.6%, cercle parfait */}
           <button
             onClick={() => {
               sound.playEnter();
@@ -544,10 +670,8 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
             }}
             aria-label="Croix (Valider / Lecture)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
-            style={getHitboxStyle({ top: '58.5%', left: '89.5%', width: '5.6%' }, true)}
+            style={getHitboxStyle(activeChassis.hotspots.cross, true)}
           />
-
-          {/* Carré (▢ - Gauche) : left 83.5%, top 44.0%, width 5.6%, cercle parfait */}
           <button
             onClick={() => {
               sound.playTick();
@@ -555,10 +679,8 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
             }}
             aria-label="Carré (Bascule Play / Pause immédiate)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
-            style={getHitboxStyle({ top: '44.0%', left: '83.5%', width: '5.6%' }, true)}
+            style={getHitboxStyle(activeChassis.hotspots.square, true)}
           />
-
-          {/* Rond (◯ - Droite) : left 95.5%, top 44.0%, width 5.6%, cercle parfait */}
           <button
             onClick={() => {
               sound.playBack();
@@ -566,11 +688,10 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
             }}
             aria-label="Rond (Retour arrière)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
-            style={getHitboxStyle({ top: '44.0%', left: '95.5%', width: '5.6%' }, true)}
+            style={getHitboxStyle(activeChassis.hotspots.circle, true)}
           />
 
-          {/* ----- 4. BARRE INFÉRIEURE : BOUTONS TACTILES PSP STREET (+20% surface cliquable) ----- */}
-          {/* Touche PS / Home : centrage chirurgical sur le logo PS (left 24.8%, top 92.6%) */}
+          {/* ----- 4. BARRE INFÉRIEURE DU CHÂSSIS ----- */}
           <button
             onClick={() => {
               if (powerState === 'off') {
@@ -580,20 +701,18 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
               sound.playBack();
               sendCommand('home');
             }}
-            aria-label="Touche PS / Accueil (Allumage en veille)"
+            aria-label="Touche HOME / PS (Allumage en veille)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75 flex items-center justify-center overflow-visible z-30"
             style={{
-              ...getHitboxStyle({ top: '92.6%', left: '24.8%', width: '4.8%', height: '5.5%', borderRadius: '4px' }),
+              ...getHitboxStyle(activeChassis.hotspots.home),
               opacity: debugHitboxes ? 1 : powerState === 'off' ? 1 : 0,
             }}
           >
-            {/* Halo lumineux blanc brillant et éclatant, centre transparent pour laisser le logo visible, pulsation douce */}
             {powerState === 'off' && (
               <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-transparent border border-white/60 shadow-[0_0_16px_5px_rgba(255,255,255,0.9),0_0_32px_10px_rgba(255,255,255,0.45)] animate-pulse pointer-events-none z-30" />
             )}
           </button>
 
-          {/* Volume - : left 31.0%, top 92%, width 4.5%, height 6% */}
           <button
             onClick={() => {
               sendCommand('vol_down');
@@ -601,10 +720,9 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
             }}
             aria-label="Volume -"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
-            style={getHitboxStyle({ top: '92%', left: '31.0%', width: '4.5%', height: '6%', borderRadius: '4px' })}
+            style={getHitboxStyle(activeChassis.hotspots.volDown)}
           />
 
-          {/* Volume + : recalibré chirurgicalement sur (+) à left 38.6%, top 92%, width 4.5%, height 6% */}
           <button
             onClick={() => {
               sendCommand('vol_up');
@@ -612,57 +730,51 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
             }}
             aria-label="Volume +"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
-            style={getHitboxStyle({ top: '92%', left: '38.6%', width: '4.5%', height: '6%', borderRadius: '4px' })}
+            style={getHitboxStyle(activeChassis.hotspots.volUp)}
           />
 
-          {/* Touche Note de Musique (♪) : sérigraphie officielle PSP gris argenté, centrée entre PSP et SELECT */}
-          <button
-            onClick={() => {
-              if (powerState === 'off') return;
-              sound.playOption();
-              sendCommand('music_note');
-            }}
-            aria-label="Touche Note de Musique (Mixeur Audio / Lecture)"
-            title="Note de Musique (♪ / M)"
-            className={`absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.9] transition-all duration-150 flex items-center justify-center rounded z-30 ${
-              debugHitboxes
-                ? 'outline outline-2 outline-red-500 bg-red-500/20 text-white'
-                : powerState === 'off'
-                  ? 'text-[#c2c6ce]/80'
-                  : isPlaying
-                    ? 'text-white drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]'
-                    : 'text-[#c2c6ce]/85 hover:text-white'
-            }`}
-            style={{ top: '92.5%', left: '59.4%', width: '4.0%', height: '5.5%' }}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="w-3.5 h-3.5"
-              fill="currentColor"
-              aria-hidden="true"
-            >
-              <path d="M13 4v10.55A3.5 3.5 0 1 0 14.8 18V8.4l4.7 1.35V6.6L13 4z" />
-            </svg>
-          </button>
+          {/* Bouton Écran / Luminosité physique (uniquement PSP-2000, zone invisible) */}
+          {activeChassis.hotspots.display && (
+            <button
+              onClick={cycleBrightness}
+              aria-label="Luminosité de l'écran (5 paliers)"
+              title="Luminosité de l'écran (▭ / B)"
+              className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
+              style={getHitboxStyle(activeChassis.hotspots.display)}
+            />
+          )}
 
-          {/* SELECT : change le visualiseur dans le lecteur audio ou le thème en boucle */}
+          {/* Bouton Note de Musique physique (uniquement PSP-2000, zone invisible) */}
+          {activeChassis.hotspots.musicNote && (
+            <button
+              onClick={() => {
+                if (powerState === 'off') return;
+                sound.playOption();
+                sendCommand('music_note');
+              }}
+              aria-label="Touche Note de Musique (Mixeur Audio / Lecture)"
+              title="Note de Musique (♪ / M)"
+              className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
+              style={getHitboxStyle(activeChassis.hotspots.musicNote)}
+            />
+          )}
+
           <button
             onClick={() => {
               sendCommand('select');
             }}
             aria-label="SELECT"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
-            style={getHitboxStyle({ top: '92%', left: '66.5%', width: '6%', height: '6%', borderRadius: '4px' })}
+            style={getHitboxStyle(activeChassis.hotspots.select)}
           />
 
-          {/* START : left 74.5%, top 92%, width 6%, height 6% */}
           <button
             onClick={() => {
               sendCommand('start');
             }}
             aria-label="START (Pause / Play / Mixeur)"
             className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer active:scale-[0.92] transition-transform duration-75"
-            style={getHitboxStyle({ top: '92%', left: '74.5%', width: '6%', height: '6%', borderRadius: '4px' })}
+            style={getHitboxStyle(activeChassis.hotspots.start)}
           />
         </div>
       </div>
@@ -676,7 +788,10 @@ export const PSPConsole: React.FC<PSPConsoleProps> = ({ debugHitboxes = false })
             className="px-6 py-2.5 rounded-full bg-white/10 hover:bg-white/15 border border-white/20 backdrop-blur-xl transition-all duration-300 shadow-[0_4px_20px_rgba(0,0,0,0.5)] group cursor-pointer"
           >
             <p className="text-xs font-mono text-white/90 group-hover:text-white tracking-wide flex items-center gap-2">
-              <span className="text-base text-cyan-300">↖</span> Cliquez sur le bouton PlayStation pour allumer
+              <span className="text-base text-cyan-300">↖</span>{' '}
+              {activeChassis.id === 'psp-2000-silver'
+                ? 'Cliquez sur le bouton HOME pour allumer'
+                : 'Cliquez sur le bouton PlayStation pour allumer'}
             </p>
           </button>
         </div>

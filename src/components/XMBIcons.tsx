@@ -132,6 +132,22 @@ export const PSPKeycap: React.FC<{
   </span>
 );
 
+export const DisplayKeycap: React.FC = () => (
+  <PSPKeycap shape="pill" className="px-1">
+    <svg viewBox="0 0 14 10" className="w-2.5 h-[7px]" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+      <rect x="1.5" y="1.5" width="11" height="7" rx="1.5" />
+    </svg>
+  </PSPKeycap>
+);
+
+export const MusicNoteKeycap: React.FC = () => (
+  <PSPKeycap shape="circle">
+    <svg viewBox="0 0 24 24" className="w-2 h-2" fill="currentColor" aria-hidden="true">
+      <path d="M13 4v10.55A3.5 3.5 0 1 0 14.8 18V8.4l4.7 1.35V6.6L13 4z" />
+    </svg>
+  </PSPKeycap>
+);
+
 // Official PlayStation brand symbol
 export const PlayStationLogo: React.FC<{ size?: number; className?: string }> = ({
   size = 22,
