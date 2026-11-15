@@ -3,6 +3,8 @@
 **Auteur :** Creative Tech & Retro Systems Engineering  
 **Version Firmware de Référence :** Sony PlayStation Portable v6.61  
 
+> ℹ️ **Note de mise à jour (Branche `CHOR`) :** Ce document constitue l'audit architectural fondateur du projet. Pour l'architecture actuelle multi-skin (`PSP-2000 Silver` par défaut + `PSP Street E1000`), la refonte audio/SFX native (`system_ok.mp3`, suppression des oscillateurs synthétiques), les optimisations de chargement vidéo (miniatures + culling DOM + normalisation NFC), l'émulation Motorola J2ME (`FreeJ2ME-Web`) et le guide de reprise PC Windows, consultez [`docs/SYNTHESE_PROJET_ET_HANDOFF.md`](./SYNTHESE_PROJET_ET_HANDOFF.md).
+
 ---
 
 ## 1. Matrice des Flux XMB & Hiérarchie Spatiale 2D
